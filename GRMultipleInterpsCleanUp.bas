@@ -144,8 +144,17 @@ Sub UpdateHPVResults()
     .ReferenceStyle = xlR1C1
   End With
 
+    Dim HPV16Col As Integer
+    If Range("S1") = "HPV16" Then
+        HPV16Col = 19
+    Else
+    If Range("T1") = "HPV16" Then
+        HPV16Col = 20
+        End If
+    End If
+    
     Dim col As Integer
-    For col = 20 To 22
+    For col = HPV16Col To (HPV16Col + 2)
     
       Dim cell As Range
       On Error Resume Next
@@ -234,6 +243,62 @@ Sub DeleteDuplicateInterpretations()
   
 End Sub
 
+Function CheckHPV(rng As String) As Boolean
+
+  If Range(rng) = "HPV16" Then
+  CheckHPV = True
+  Else
+  CheckHPV = False
+  End If
+  
+End Function
+
+Sub InsertHPVOverall()
+    With Application
+    .Calculation = xlCalculationManual
+    .ScreenUpdating = False
+    .ReferenceStyle = xlR1C1
+    End With
+    
+    Dim lr As Long
+    lr = LastRow(Worksheets("Data"))
+        
+    If CheckHPV("S1") = True Then
+    
+        If IsEmpty(Range("Z1")) = True Then
+        
+            'MsgBox "z1 was empty, formula will be placed - last row is " & lr
+            
+            'formula here
+            Range("Z1").Value = "HPVOverall"
+            Range("Z2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+        Else
+        If (IsEmpty(Range("AA1")) = True) And (Range("Z1") <> "HPVOverall") Then
+            'MsgBox "Z1 was not empty, entered next IF statement"
+            Range("AA1").Value = "HPVOverall"
+            Range("AA2", "AA" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+            End If
+            
+        End If
+    Else
+    If CheckHPV("T1") = True Then
+        If (IsEmpty(Range("AA1")) = True) And (Range("Z1") <> "HPVOverall") Then
+            Range("AA1").Value = "HPVOverall"
+            Range("AA2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+            End If
+    
+        'MsgBox "checkhpv returned false, hpv16 not in column 19/S or 20/T"
+        End If
+    End If
+    
+
+    With Application
+    .Calculation = xlCalculationAutomatic
+    .ScreenUpdating = True
+  End With
+
+End Sub
+
 Sub RowSizeZoom()
   Dim ws As Worksheet
   For Each ws In Worksheets
@@ -242,7 +307,22 @@ Sub RowSizeZoom()
   ActiveWindow.Zoom = 70
 End Sub
 
-Sub MultipleInterpsCleanUpMerged()
+Sub CleanUp()
+    Dim scount As Long
+    scount = ThisWorkbook.Sheets.Count
+    If scount > 1 Then
+        MsgBox "this workbook has multiple sheets"
+        MultiSheetSub
+    Else
+    If scount = 1 Then
+        MsgBox "this workbook has only ONE sheet"
+        SingleSheetSub
+        End If
+    End If
+            
+End Sub
+
+Sub MultiSheetSub()
   
   UnmergeAll
   DeleteEmptyRows
@@ -250,17 +330,20 @@ Sub MultipleInterpsCleanUpMerged()
   UpdateHPVResults
   DeleteHPVLines
   DeleteDuplicateInterpretations
+  InsertHPVOverall
   SortData
   RowSizeZoom
   
 End Sub
 
-Sub MultipleInterpsCleanUpNotMergedOneSheet()
+Sub SingleSheetSub()
   
+  UnmergeAll
   RenameSheet
   UpdateHPVResults
   DeleteHPVLines
   DeleteDuplicateInterpretations
+  InsertHPVOverall
   SortData
   RowSizeZoom
 End Sub
