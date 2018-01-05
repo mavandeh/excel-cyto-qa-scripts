@@ -156,15 +156,45 @@ Sub UpdateHPVResults()
         End If
     End If
     
-    ThisWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range( _
-        "B:B"), SortOn:=xlSortOnValues, Order:=xlDescending, _
-        CustomOrder:="HPV,STPCO,DTPCO,STHPV,DTHPV,TPRPS,TPRPD", _
-        DataOption:=xlSortNormal
-    ThisWorkbook.Worksheets("Data").Sort.Apply
+    Dim sCustomList(1 To 9) As String
+    sCustomList(1) = "HPV"
+    sCustomList(2) = "HPVG"
+    sCustomList(3) = "STPCO"
+    sCustomList(4) = "DTPCO"
+    sCustomList(5) = "STHPV"
+    sCustomList(6) = "DTHPV"
+    sCustomList(7) = "TPRPS"
+    sCustomList(8) = "TPRPD"
+    sCustomList(9) = "TPRCY"
     
+    Application.AddCustomList ListArray:=sCustomList
+    
+    Dim Ws As Worksheet, Rngsort As Range, RngKey As Range, RngKey1 As Range
+    
+    'Populate Ws
+    Set Ws = ActiveWorkbook.Worksheets("Data")
+    
+    'Clear out any previous Sorts that may be leftover
+    Ws.Sort.SortFields.Clear
+    
+    'range that includes all columns to sort
+    Set Rngsort = Ws.UsedRange
+    
+    'Columns with keys to sort
+    Set RngKey = Ws.Range("A1")
+    Set RngKey1 = Ws.Range("B1")
+
+    'Perform the sort
+    With ActiveWorkbook.Worksheets("Data").Sort
+        Rngsort.Sort Key1:=RngKey1, Order1:=xlAscending, Header:=xlYes, OrderCustom:=Application.CustomListCount + 1, MatchCase:=False, Orientation:=xlSortColumns, DataOption1:=xlSortNormal
+        Rngsort.Sort Key1:=RngKey, Order1:=xlAscending, Header:=xlYes, OrderCustom:=Application.CustomListCount + 1, MatchCase:=False, Orientation:=xlSortColumns, DataOption1:=xlSortNormal
+    End With
+    
+    Application.DeleteCustomList Application.CustomListCount
+
     Dim col As Integer
     For col = HPV16Col To (HPV16Col + 2)
-    
+
       Dim cell As Range
       On Error Resume Next
       For Each cell In Columns(col).SpecialCells(xlCellTypeBlanks).Areas
@@ -172,12 +202,12 @@ Sub UpdateHPVResults()
          cell.Value = cell.Value ' comment this line for formula troubleshooting
       Next cell
     Next col
-    
-  With Application
-    .Calculation = xlCalculationAutomatic
-    .ScreenUpdating = True
-  End With
-    
+
+    With Application
+        .Calculation = xlCalculationAutomatic
+        .ScreenUpdating = True
+    End With
+
 End Sub
 
 Sub RenameSheet()
@@ -221,11 +251,11 @@ Sub DeleteDuplicateInterpretations()
 
   ' Original code utilizing LastRow() Function from MSDN above.
 
-  Dim ws As Worksheet
+  Dim Ws As Worksheet
   Dim lr As Long
     
-  Set ws = Worksheets("Data")
-  lr = LastRow(ws)
+  Set Ws = Worksheets("Data")
+  lr = LastRow(Ws)
   
   'create case-employee column (Y=A&I)
   Range("Y1").Value = "CASE_EMPLOYEE"
@@ -309,10 +339,10 @@ Sub InsertHPVOverall()
 End Sub
 
 Sub RowSizeZoom()
-  Dim ws As Worksheet
-  For Each ws In Worksheets
-    ws.Range("A2:A" & ws.Rows.Count).RowHeight = 12.75
-  Next ws
+  Dim Ws As Worksheet
+  For Each Ws In Worksheets
+    Ws.Range("A2:A" & Ws.Rows.Count).RowHeight = 12.75
+  Next Ws
   ActiveWindow.Zoom = 70
 End Sub
 
@@ -356,3 +386,14 @@ Sub SingleSheetSub()
   SortData
   RowSizeZoom
 End Sub
+
+Sub QuickRecopy()
+  CopyRangeFromMultiWorksheets
+  RowSizeZoom
+  UpdateHPVResults
+  DeleteHPVLines
+  DeleteDuplicateInterpretations
+  InsertHPVOverall
+  SortData
+End Sub
+
