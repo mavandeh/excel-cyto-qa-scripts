@@ -14,7 +14,10 @@ End Sub
 
 Sub DeleteEmptyRows()
   Dim currentSheet As Worksheet
+  
+
   For Each currentSheet In Worksheets
+    On Error Resume Next
     currentSheet.Range("A:A").SpecialCells(xlCellTypeBlanks).EntireRow.Delete
   Next
 End Sub
@@ -125,7 +128,7 @@ Sub SortData()
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range("P1") _
         , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
     With ActiveWorkbook.Worksheets("Data").Sort
-        .SetRange Range("A:Y")
+        .SetRange Range("A:Z")
         .Header = xlYes
         .MatchCase = False
         .Orientation = xlTopToBottom
@@ -152,6 +155,12 @@ Sub UpdateHPVResults()
         HPV16Col = 20
         End If
     End If
+    
+    ThisWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range( _
+        "B:B"), SortOn:=xlSortOnValues, Order:=xlDescending, _
+        CustomOrder:="HPV,STPCO,DTPCO,STHPV,DTHPV,TPRPS,TPRPD", _
+        DataOption:=xlSortNormal
+    ThisWorkbook.Worksheets("Data").Sort.Apply
     
     Dim col As Integer
     For col = HPV16Col To (HPV16Col + 2)
@@ -311,11 +320,11 @@ Sub CleanUp()
     Dim scount As Long
     scount = ThisWorkbook.Sheets.Count
     If scount > 1 Then
-        MsgBox "this workbook has multiple sheets"
+        ' MsgBox "this workbook has multiple sheets"
         MultiSheetSub
     Else
     If scount = 1 Then
-        MsgBox "this workbook has only ONE sheet"
+        ' MsgBox "this workbook has only ONE sheet"
         SingleSheetSub
         End If
     End If
