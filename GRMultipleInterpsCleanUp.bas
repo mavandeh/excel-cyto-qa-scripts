@@ -131,7 +131,7 @@ Sub SortData()
         , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range("B1") _
         , SortOn:=xlSortOnValues, Order:=xlAscending, CustomOrder:= _
-        "HPV,TPRPS,TPRPD,STHPV,DTHPV,STPCO,DTPCO", DataOption:=xlSortNormal
+        "HPV,HPVG,TPRPS,TPRPD,STHPV,DTHPV,STPCO,DTPCO", DataOption:=xlSortNormal
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range("P1") _
         , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
     With ActiveWorkbook.Worksheets("Data").Sort
@@ -154,14 +154,34 @@ Sub UpdateHPVResults()
     .ReferenceStyle = xlR1C1
   End With
 
-    Dim HPV16Col As Integer
-    If Range("S1") = "HPV16" Then
-        HPV16Col = 19
-    Else
-    If Range("T1") = "HPV16" Then
-        HPV16Col = 20
+    Dim HPV16Col As Integer, mankato As Boolean, mcra As Boolean, ws As Worksheet, i As Integer
+        
+    Set ws = ActiveWorkbook.Worksheets("Data")
+    'find the hpv16 column and store the index
+    For HPV16Col = 1 To LastCol(ws)
+        If ws.Cells(1, HPV16Col).Value = "HPV16" Then
+            Exit For
         End If
-    End If
+    Next HPV16Col
+    Dim str As Variant
+    'loop through all rows looking at accession classes to determine if data is mixed or MCHS or MCR/MCA only
+    For i = 1 To LastRow(ws)
+        If i > 1 Then ws.Cells(i, 1) = Left(ws.Cells(i, 1), 9)
+        If (Left(ws.Cells(i, 1).Value, 2) = "GM") Then
+            mankato = True
+        ElseIf (Left(ws.Cells(i, 1).Value, 2) = "GA") Or (Left(ws.Cells(i, 1).Value, 2) = "GR") Then
+            mcra = True
+        End If
+        If mcra And mankato Then
+            'results are incompatible because test code is different.
+            MsgBox "Sheet contains data with both GM and GR/GA cases.  HPV results are incompatible. " _
+                & "Please rerun report including only filters for GM/HPVG or GR/GA/HPV and " _
+                & "Pap test codes."
+            End
+        End If
+    Next i
+
+    'MsgBox "UpdateHPVResults(): mcra = " & mcra & ", mankato = " & mankato
     
     Dim sCustomList(1 To 9) As String
     sCustomList(1) = "HPV"
@@ -176,7 +196,7 @@ Sub UpdateHPVResults()
     
     Application.AddCustomList ListArray:=sCustomList
     
-    Dim ws As Worksheet, Rngsort As Range, RngKey As Range, RngKey1 As Range
+    Dim Rngsort As Range, RngKey As Range, RngKey1 As Range
     
     'Populate Ws
     Set ws = ActiveWorkbook.Worksheets("Data")
@@ -204,17 +224,27 @@ Sub UpdateHPVResults()
 
       Dim cell As Range
       On Error Resume Next
-      For Each cell In Columns(col).SpecialCells(xlCellTypeBlanks).Areas
-         cell.FormulaArray = "=INDEX(C,MATCH(RC1&""HPV"",C1&C2,0))"
-         cell.Value = cell.Value ' comment this line for formula troubleshooting
-      Next cell
+      If Not mankato Then
+        For Each cell In Columns(col).SpecialCells(xlCellTypeBlanks).Areas
+            cell.FormulaArray = "=INDEX(C,MATCH(LEFT(RC1,9)&""HPV"",LEFT(C1,9)&C2,0))"
+            cell.Value = cell.Value ' comment this line for formula troubleshooting
+        Next cell
+      ElseIf mankato Then
+        If ws.Cells(1, col).Value = "HPV18" Then ws.Cells(1, col).Value = "HPV18/45"
+        For Each cell In Columns(col).SpecialCells(xlCellTypeBlanks).Areas
+            cell.FormulaArray = "=INDEX(C,MATCH(LEFT(RC1,9)&""HPVG"",LEFT(C1,9)&C2,0))"
+            cell.Value = cell.Value ' comment this line for formula troubleshooting
+        Next cell
+      End If
     Next col
 
+    If Not mankato Then InsertHPVOverall
+    
     With Application
         .Calculation = xlCalculationAutomatic
         .ScreenUpdating = True
     End With
-
+    
 End Sub
 
 Sub RenameSheet()
@@ -224,28 +254,27 @@ End Sub
 Sub DeleteHPVLines()
 
     ' Modified from https://danwagner.co/how-to-delete-rows-with-range-autofilter/
-    Dim wksData As Worksheet
-    Dim lngLastRow As Long
+    Dim ws As Worksheet, lr As Long, lc As Long
     Dim rngData As Range
 
-    Set wksData = ThisWorkbook.Worksheets("Data")
+    Set ws = ActiveWorkbook.Worksheets("Data")
+    lr = LastRow(ws)
+    lc = LastCol(ws)
+    Set rngData = ws.Range(ws.Cells(1, 1), ws.Cells(lr, lc))
     
-    With wksData
-        lngLastRow = .Range("A" & .Rows.Count).End(xlUp).Row
-        Set rngData = .Range("A1:X" & lngLastRow)
-    End With
     
     Application.DisplayAlerts = False
         With rngData
+            On Error Resume Next
             ' Filter for HPV in the test column (#2)
-            .AutoFilter Field:=2, Criteria1:="HPV"
+            .AutoFilter Field:=2, Criteria1:="HPV", Operator:=xlOr, Criteria2:="HPVG"
             ' Delete visible rows, keep header
             .Offset(1, 0).Resize(.Rows.Count - 1).SpecialCells(xlCellTypeVisible).EntireRow.Delete
         End With
     Application.DisplayAlerts = True
     
     'Turn off the AutoFilter
-    With wksData
+    With ws
         .AutoFilterMode = False
         If .FilterMode = True Then
             .ShowAllData
@@ -258,16 +287,38 @@ Sub DeleteDuplicateInterpretations()
 
   ' Original code utilizing LastRow() Function from MSDN above.
 
-  Dim ws As Worksheet
-  Dim lr As Long
-    
+  Dim ws As Worksheet, lr As Long, lc As Long, empCol As Long, caseCol As Long, intDTCol As Long, i As Integer
+  Dim str As String
+            
   Set ws = Worksheets("Data")
   lr = LastRow(ws)
+  lc = LastCol(ws)
   
-  'create case-employee column (Y=A&I)
-  Range("Y1").Value = "CASE_EMPLOYEE"
-  Range("Y2").Formula = "=A2&I2"
-  Range("Y2").AutoFill Destination:=Range("Y2:Y" & lr)
+  'find case number and employee columns
+  For i = 1 To lc
+    'MsgBox "DeleteDuplicateInterpretations(): col(" & i & ") name is " & ws.Cells(1, i).Value
+    If ws.Cells(1, i).Value = "CASE NUMBER" Then
+        caseCol = i
+    ElseIf ws.Cells(1, i).Value = "EMPLOYEE" Then
+        empCol = i
+    ElseIf ws.Cells(1, i).Value = "INTERPRETATION DT" Then
+        intDTCol = i
+    ElseIf (caseCol > 0) And (empCol > 0) And (intDTCol > 0) Then
+        Exit For
+    End If
+    If i = lc Then
+        MsgBox "DeleteDuplicateInterpretations(): Could not find one or more columns: " _
+            & "case number, employee, or interpretation dt."
+        End
+    End If
+  Next i
+
+
+  'create case-employee column
+  ws.Cells(1, lc + 1).Value = "CASE_EMPLOYEE"
+  lc = LastCol(ws)
+  ws.Cells(2, lc).Formula = "=RC[" & caseCol - lc & "]&RC[" & empCol - lc & "]"
+  ws.Cells(2, lc).AutoFill Destination:=Range(ws.Cells(2, lc), ws.Cells(lr, lc))
   
   'sort by case-person ascending (Y) and then by interp date descending (P)
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Clear
@@ -300,44 +351,65 @@ Function CheckHPV(rng As String) As Boolean
 End Function
 
 Sub InsertHPVOverall()
+
     With Application
     .Calculation = xlCalculationManual
     .ScreenUpdating = False
     .ReferenceStyle = xlR1C1
     End With
     
-    Dim lr As Long
-    lr = LastRow(Worksheets("Data"))
-        
-    If CheckHPV("S1") = True Then
-    
-        If IsEmpty(Range("Z1")) = True Then
-        
-            'MsgBox "z1 was empty, formula will be placed - last row is " & lr
+    Dim ws As Worksheet, lr As Long, lc As Long, colName As String, i As Integer
+    Dim HPV16Col As Long, HPV18Col As Long, HPVOthCol As Long
             
-            'formula here
-            Range("Z1").Value = "HPVOverall"
-            Range("Z2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+    colName = "HPVOverall (GR/GA)"
+    ws = ActiveWorkbook.Worksheets("Data")
+    lr = LastRow(ws)
+    lc = LastCol(ws)
+    
+    For i = 1 To lc
+        If ws.Cells(1, i).Value = "HPV16" Then
+            HPV16Col = i
+        ElseIf ws.Cells(1, i).Value = "HPV18" Then
+            HPV18Col = i
+        ElseIf ws.Cells(1, i).Value = "HPVOTHER" Then
+            HPV18Col = i
+        ElseIf (HPV16Col > 0) And (HPV18Col > 0) And (HPVOthCol > 0) Then
+            Exit For
         Else
-        If (IsEmpty(Range("AA1")) = True) And (Range("Z1") <> "HPVOverall") Then
-            'MsgBox "Z1 was not empty, entered next IF statement"
-            Range("AA1").Value = "HPVOverall"
-            Range("AA2", "AA" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
-            End If
-            
+            MsgBox "InsertHPVOverall(): Could not find one or more columns: " _
+                & "HPV16, HPV18, or HPVOTHER."
+            End
         End If
-    Else
-    If CheckHPV("T1") = True Then
-        If (IsEmpty(Range("AA1")) = True) And (Range("Z1") <> "HPVOverall") Then
-            Range("AA1").Value = "HPVOverall"
-            Range("AA2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
-            End If
+    Next i
     
-        'MsgBox "checkhpv returned false, hpv16 not in column 19/S or 20/T"
-        End If
-    End If
+    ws.Cells(1, lc + 1).Value = colName
+    Range(ws.Cells(2, lc + 1), ws.Cells(lr, lc + 1)).FormulaR1C1 = "=IF(OR(RC[" & lc - HPV16Col & "]=""Positive"",OR(RC[" & lc - HPV18Col & "]=""Positive"",RC[" & lc - HPVOthCol & "]=""Positive"")),""Positive"",IF(OR(RC[" & lc - HPV16Col & "]=""Negative"",OR(RC[" & lc - HPV18Col & "]=""Negative"",RC[" & lc - HPVOthCol & "]=""Negative"")),""Negative"",0))"
+               
+    ' this is the old static column placement, dependent on how the report places columns
+    'If CheckHPV("S1") Then
+    '    If IsEmpty(Range("Z1")) Then
+    '        'formula here
+    '        Range("Z1").Value = colName
+    '        Range("Z2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+    '    Else
+    '    If IsEmpty(Range("AA1")) And (Range("Z1") <> colName) Then
+    '        'MsgBox "Z1 was not empty, entered next IF statement"
+    '        Range("AA1").Value = "HPVOverall"
+    '        Range("AA2", "AA" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+    '        End If
+    '
+    '    End If
+    'Else
+    'If CheckHPV("T1") = True Then
+    '    If (IsEmpty(Range("AA1")) = True) And (Range("Z1") <> colName) Then
+    '        Range("AA1").Value = "HPVOverall"
+    '        Range("AA2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
+    '        End If
+   '
+   '     'MsgBox "checkhpv returned false, hpv16 not in column 19/S or 20/T"
+   '     End If
+   ' End If
     
-
     With Application
     .Calculation = xlCalculationAutomatic
     .ScreenUpdating = True
@@ -605,6 +677,7 @@ Sub PTBenchmarks()
     pt.PivotFields("EMPLOYEE").ShowDetail = False
 
     'select nil category items and group them:
+    On Error Resume Next
     Application.PivotTableSelection = True
     pt.PivotSelect "DIAGNOSIS CATEGORY[GYN NIL,GYNNOEC,GYN REAC,GYN ORG]", xlLabelOnly
     Selection.Group
@@ -620,6 +693,7 @@ Sub PTBenchmarks()
     
     'sort diagnosis categories
     With pt.PivotFields("DIAGNOSIS CATEGORY2")
+        On Error Resume Next
         .ShowDetail = False
         .PivotItems("GYN UNSAT").Position = 1
         .PivotItems("NIL").Position = 2
@@ -859,7 +933,7 @@ Sub PTBenchmarks()
 
     For i = 5 To LastRow(ws)
         If Len(ws.Cells(i, fcolp).Value) > 5 Then
-            Range(Cells(i, fcolp), Cells(LastRow(ws), LastCol(ws))).FormatConditions.Delete
+            Range(Cells(i, fcolp), Cells(LastRow(ws), LastCol(ws) - 10)).FormatConditions.Delete
             Exit For
         End If
     Next i
@@ -907,6 +981,7 @@ Sub PTHPVbyDx()
     End With
     
     'select nil category items and group them:
+    On Error Resume Next
     Application.PivotTableSelection = True
     pt.PivotSelect "DIAGNOSIS CATEGORY[GYN NIL,GYNNOEC,GYN REAC,GYN ORG]", xlLabelOnly
     Selection.Group
@@ -914,6 +989,7 @@ Sub PTHPVbyDx()
     Selection.Value = "NIL"
     'sort diagnosis categories
     With pt.PivotFields("DIAGNOSIS CATEGORY2")
+        On Error Resume Next
         .ShowDetail = False
         .PivotItems("GYN UNSAT").Position = 1
         .PivotItems("NIL").Position = 2
@@ -1069,6 +1145,7 @@ Sub PTASCUSHPV()
     End With
     
     '2) select nil category items and group them:
+    On Error Resume Next
     Application.PivotTableSelection = True
     pt.PivotSelect "DIAGNOSIS CATEGORY[GYN NIL,GYNNOEC,GYN REAC,GYN ORG]", xlLabelOnly
     Selection.Group
@@ -1077,6 +1154,7 @@ Sub PTASCUSHPV()
     
     '3) sort diagnosis categories
     With pt.PivotFields("DIAGNOSIS CATEGORY2")
+        On Error Resume Next
         .ShowDetail = False
         .PivotItems("GYN UNSAT").Position = 1
         .PivotItems("NIL").Position = 2
@@ -1244,6 +1322,7 @@ Sub PTCTAgreement()
     End With
     
     '2) select nil category items and group them:
+    On Error Resume Next
     Application.PivotTableSelection = True
     pt.PivotSelect "DIAGNOSIS CATEGORY[GYN NIL,GYNNOEC,GYN REAC,GYN ORG]", xlLabelOnly
     Selection.Group
@@ -1252,6 +1331,7 @@ Sub PTCTAgreement()
     
     '3) sort diagnosis categories
     With pt.PivotFields("DIAGNOSIS CATEGORY2")
+        On Error Resume Next
         .ShowDetail = False
         .PivotItems("GYN UNSAT").Position = 1
         .PivotItems("NIL").Position = 2
@@ -1376,7 +1456,10 @@ Sub PTCTAgreement()
     ActiveChart.FullSeriesCollection(3).ApplyDataLabels
     ActiveChart.FullSeriesCollection(2).ApplyDataLabels
     ActiveChart.FullSeriesCollection(1).ApplyDataLabels
+    
+    ActiveChart.ChartArea.Interior.Color = RGB(255, 255, 255)
 
+    
     With ActiveChart.Parent
         .Height = 600 ' resize 2.5 pt at 72 ppi.
         .Width = 1000 ' resize 4.0 pt at 72 ppi.
@@ -1389,11 +1472,14 @@ Sub PTCTAgreement()
     ActiveWorkbook.SlicerCaches.Add2(ActiveSheet.PivotTables(ptName), _
         "DIAGNOSIS CATEGORY").Slicers.Add ActiveSheet, , "DIAGNOSIS CATEGORY", _
         "DIAGNOSIS CATEGORY", 253.5, 658.5, 144, 187.5
+    ActiveWorkbook.SlicerCaches.Add2(ActiveChart.PivotLayout.PivotTable, _
+        "QUALITY CODE").Slicers.Add ActiveSheet, , "QUALITY CODE", "QUALITY CODE", _
+        294.75, 765.75, 144, 187.5
     
     Range("A1").Select
     ActiveWorkbook.ShowPivotTableFieldList = False
     
-    Range("F50").Value = "Chart includes only ASCUS cases. Cytotechnologists may be added back in by clicking the filter icon to the right of EMPLOYEE TYPE in the Pivot Table Fields list (Select Pivot Table, Analyze Tab > Field List to show)."
+    Range("F50").Value = ""
     
 End Sub
 
@@ -1404,13 +1490,16 @@ Sub PTCTPathAgreement()
 
 ' https://www.mrexcel.com/forum/excel-questions/785527-macro-create-pivot-table-dynamic-data-range.html
 
-    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem
-    Dim name As String, ptName As String, cTitle As String, cLoc As String, i As Long
-    
+    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem, ws As Worksheet, i As Long, j As Long
+    Dim name As String, ptName As String, cTitle As String, cLoc As Range, pasteCol As Long, pasteRow As Long
+    Dim chartatlastcol As Boolean
+            
     name = "CTPathAgreement"                                   'Pivot table and tab name
     ptName = "PT" & name
     cTitle = "Cytotech-Pathologist Agreement Rate"             'chart title
-    cLoc = "M1"                                                'cell for chart location
+    Set cLoc = Range("M1")                                     'cell for chart location
+    chartatlastcol = True
+    
 
     On Error Resume Next
         Application.DisplayAlerts = False
@@ -1426,6 +1515,7 @@ Sub PTCTPathAgreement()
         .Tab.Color = RGB(112, 48, 160)
     End With
     
+    Set ws = Worksheets("CTPathAgreement")
     Set pt = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=Range("A1"), TableName:=ptName)
 
     'Diagnosis category setup.  1) Add diagnosis category to PT
@@ -1435,6 +1525,7 @@ Sub PTCTPathAgreement()
     End With
     
     '2) select nil category items and group them:
+    On Error Resume Next
     Application.PivotTableSelection = True
     pt.PivotSelect "DIAGNOSIS CATEGORY[GYN NIL,GYNNOEC,GYN REAC,GYN ORG]", xlLabelOnly
     Selection.Group
@@ -1443,6 +1534,7 @@ Sub PTCTPathAgreement()
     
     '3) sort diagnosis categories
     With pt.PivotFields("DIAGNOSIS CATEGORY2")
+        On Error Resume Next
         .ShowDetail = False
         .PivotItems("GYN UNSAT").Position = 1
         .PivotItems("NIL").Position = 2
@@ -1495,20 +1587,21 @@ Sub PTCTPathAgreement()
         End If
     Next pi
     
+    
     'Sort quality codes in ascending order on chart.
     With pt.PivotFields("QUALITY CODE")
         On Error Resume Next
+        .PivotItems("CY+3").Position = 1
+        .PivotItems("CY+2").Position = 1
+        .PivotItems("CY+1.5").Position = 1
+        .PivotItems("CY+1").Position = 1
+        .PivotItems("CY+0.5").Position = 1
+        .PivotItems("CY0").Position = 1
+        .PivotItems("CY-0.5").Position = 1
+        .PivotItems("CY-1").Position = 1
+        .PivotItems("CY-1.5").Position = 1
+        .PivotItems("CY-2").Position = 1
         .PivotItems("CY-3").Position = 1
-        .PivotItems("CY-2").Position = 2
-        .PivotItems("CY-1.5").Position = 3
-        .PivotItems("CY-1").Position = 4
-        .PivotItems("CY-0.5").Position = 5
-        .PivotItems("CY0").Position = 6
-        .PivotItems("CY+0.5").Position = 7
-        .PivotItems("CY+1").Position = 8
-        .PivotItems("CY+1.5").Position = 9
-        .PivotItems("CY+2").Position = 10
-        .PivotItems("CY+3").Position = 11
     End With
     
     pt.PivotFields("EMPLOYEE").ShowDetail = False
@@ -1527,9 +1620,13 @@ Sub PTCTPathAgreement()
     pt.PivotSelect ("")
     Charts.Add
     
+    If chartatlastcol Then
+        Set cLoc = ws.Cells(1, LastCol(ws) + 1)
+    End If
+    
     ActiveChart.Location Where:=xlLocationAsObject, name:=pt.Parent.name
-    ActiveChart.Parent.Left = Range(cLoc).Left
-    ActiveChart.Parent.Top = Range(cLoc).Top
+    ActiveChart.Parent.Left = cLoc.Left
+    ActiveChart.Parent.Top = cLoc.Top
     ActiveChart.ApplyLayout (3)
     ActiveChart.ChartType = xlColumnClustered
     ActiveChart.ShowAllFieldButtons = False
@@ -1581,37 +1678,51 @@ Sub PTCTPathAgreement()
         
     ActiveChart.Axes(xlValue).MaximumScaleIsAuto = True
     'ActiveChart.Axes(xlValue).MaximumScale = 1
-    ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 5, 128, 12).Select
-    Selection.Formula = "='CTPathAgreement'!R2C23"
-    ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 10, 128, 12).Select
-    Selection.Formula = "='CTPathAgreement'!R3C23"
-    ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 15, 128, 12).Select
-    Selection.Formula = "='CTPathAgreement'!R4C23"
+    
+    pasteCol = LastCol(ws) + 2
+    
+    With [A1]
+        pt.TableRange2.Copy
+        ws.Cells(1, pasteCol).PasteSpecial xlPasteValues
+    End With
 
+    pasteRow = 1
+    pasteCol = LastCol(ws) + 2
+    
+    ws.Cells(pasteRow, pasteCol).Value = "CY0 Rates: "
+    pasteRow = pasteRow + 1
+    ws.Cells(pasteRow, pasteCol).Value = "Cytotech CY0 Rate: "
+    ws.Cells(pasteRow, pasteCol + 1).FormulaR1C1 = "=SUM(IFERROR(GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Cytotechnologist"", ""QUALITY CODE"", ""CY0""),0),IFERROR(GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Technologist"", ""QUALITY CODE"", ""CY0""),0))/SUM(IFERROR(GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Cytotechnologist""),0),IFERROR(GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Technologist""),0))"
+    ws.Cells(pasteRow + 1, pasteCol).Value = "Resident CY0 Rate: "
+    ws.Cells(pasteRow + 1, pasteCol + 1).FormulaR1C1 = "=GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Resident"", ""QUALITY CODE"", ""CY0"")"
+    ws.Cells(pasteRow + 2, pasteCol).Value = "Fellow CY0 Rate: "
+    ws.Cells(pasteRow + 2, pasteCol + 1).FormulaR1C1 = "=GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Fellow"", ""QUALITY CODE"", ""CY0"")"
+    
+    For i = pasteRow To pasteRow + 2
+        ws.Cells(i, pasteCol + 2).FormulaR1C1 = "=RC[-2]&RC[-1]"
+        ws.Cells(i, pasteCol + 3).Value = ws.Cells(i, pasteCol + 2).Value
+        ws.Cells(i, pasteCol + 4).FormulaR1C1 = "=IF(ISERROR(RC[-3]),"""",RC[-1])"
+        
+        If i = pasteRow Then
+            With ActiveSheet.PivotTables("PTCTPathAgreement").PivotFields("Count of CASE NUMBER")
+                .Calculation = xlPercentOfRow
+                .NumberFormat = "0.00%"
+            End With
+        End If
+    Next i
+   
+    ws.ChartObjects(1).Activate
+    ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 5, 128, 12).Select
+    Selection.Formula = "='CTPathAgreement'!R2C" & LastCol(ws)
+    ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 10, 128, 12).Select
+    Selection.Formula = "='CTPathAgreement'!R3C" & LastCol(ws)
+    ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 15, 128, 12).Select
+    Selection.Formula = "='CTPathAgreement'!R4C" & LastCol(ws)
+   
     With ActiveSheet.PivotTables("PTCTPathAgreement").PivotFields("Count of CASE NUMBER")
         .Calculation = xlPercentOfRow
         .NumberFormat = "0.00%"
     End With
-
-    Range("S1").Value = "CY0 Rates: "
-    Range("S2").Value = "Cytotech CY0 Rate: "
-    Range("T2").FormulaR1C1 = "=GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Cytotechnologist"", ""QUALITY CODE"", ""CY0"")"
-    Range("S4").Value = "Resident CY0 Rate: "
-    Range("T4").FormulaR1C1 = "=GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Resident"", ""QUALITY CODE"", ""CY0"")"
-    Range("S3").Value = "Fellow CY0 Rate: "
-    Range("T3").FormulaR1C1 = "=GetPivotData(""CASE NUMBER"", R3C1, ""EMPLOYEE TYPE"", ""Fellow"", ""QUALITY CODE"", ""CY0"")"
-        
-    Range("U2").Formula = "=S2 & T2"
-    Range("U3").Formula = "=S3 & T3"
-    Range("U4").Formula = "=S4 & T4"
-    
-    Range("V2").Value = Range("U2").Value
-    Range("V3").Value = Range("U3").Value
-    Range("V4").Value = Range("U4").Value
-    
-    Range("W2").Formula = "=IF(ISERROR(T2),"""",V2)"
-    Range("W3").Formula = "=IF(ISERROR(T3),"""",V3)"
-    Range("W4").Formula = "=IF(ISERROR(T4),"""",V4)"
     
     With ActiveChart.Parent
         .Height = 600 ' resize 2.5 pt at 72 ppi.
@@ -1636,8 +1747,6 @@ Sub PTCTPathAgreement()
 
 End Sub
 
-
-
 Sub MultiSheetSub()
     'automatically selected by CleanUp() when multiple data sheets are available
     UnmergeAll
@@ -1647,7 +1756,7 @@ Sub MultiSheetSub()
     UpdateHPVResults
     DeleteHPVLines
     DeleteDuplicateInterpretations
-    InsertHPVOverall
+    'InsertHPVOverall               'commented to allow run from updatehpvresults based on mankato
     SortData
     GeneratePT
     RowSizeZoom
@@ -1656,11 +1765,12 @@ End Sub
 Sub SingleSheetSub()
     'automatically selected by CleanUp() when only one data sheet is available
     UnmergeAll
+    DeleteEmptyRows
     RenameSheet
     UpdateHPVResults
     DeleteHPVLines
     DeleteDuplicateInterpretations
-    InsertHPVOverall
+    'InsertHPVOverall               'commented to allow run from updatehpvresults based on mankato
     SortData
     GeneratePT
     RowSizeZoom
@@ -1670,11 +1780,10 @@ Sub QuickRecopy()
     'for use when data already is unmerged and empty rows deleted
     CopyRangeFromMultiWorksheets
     HideSheets
-    RowSizeZoom
     UpdateHPVResults
     DeleteHPVLines
     DeleteDuplicateInterpretations
-    InsertHPVOverall
+    'InsertHPVOverall               'commented to allow run from updatehpvresults based on mankato
     SortData
     RowSizeZoom
 End Sub
