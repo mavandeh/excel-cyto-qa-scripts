@@ -200,7 +200,7 @@ Sub PTMayoClinicianResults()
         
         'hide mml cases for mayo table
         For Each itm In hCode.PivotItems
-            If (itm.name = "MML") Then
+            If (itm.name = "2MML") Then
                 itm.Visible = False
             End If
         Next itm
@@ -404,7 +404,7 @@ Sub PTMMLClinicianResults()
         
         'hide mayo cases for mml table
         For Each itm In hCode.PivotItems
-            If (itm.name <> "MML") Then
+            If (itm.name <> "2MML") Then
                 itm.Visible = False
             End If
         Next itm
@@ -442,9 +442,7 @@ Sub PTMMLClinicianResults()
     
 '    Range("A1").Select
     ActiveWorkbook.ShowPivotTableFieldList = False
-    
-    
-    
+     
 End Sub
 
 Sub RowSizeZoom()
