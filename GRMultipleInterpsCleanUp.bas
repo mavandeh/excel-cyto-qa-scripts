@@ -288,11 +288,13 @@ Sub DeleteDuplicateInterpretations()
   ' Original code utilizing LastRow() Function from MSDN above.
 
   Dim ws As Worksheet, lr As Long, lc As Long, empCol As Long, caseCol As Long, intDTCol As Long, i As Integer
-  Dim str As String
-            
+  Dim str As String, uniqueID As String, spectypeCol As Long
+                  
   Set ws = Worksheets("Data")
   lr = LastRow(ws)
   lc = LastCol(ws)
+  uniqueID = "CASE_EMPLOYEE"            'this is the unique id by which duplicates will be identified,
+                                        'concatenation of CASE NUMBER and EMPLOYEE
   
   'find case number and employee columns
   For i = 1 To lc
@@ -303,31 +305,41 @@ Sub DeleteDuplicateInterpretations()
         empCol = i
     ElseIf ws.Cells(1, i).Value = "INTERPRETATION DT" Then
         intDTCol = i
-    ElseIf (caseCol > 0) And (empCol > 0) And (intDTCol > 0) Then
+    ElseIf ws.Cells(1, i).Value = "SPECIMEN TYPE" Then
+        spectypeCol = i
+    ElseIf (caseCol > 0) And (empCol > 0) And (intDTCol > 0) And (spectypeCol > 0) Then
         Exit For
     End If
     If i = lc Then
         MsgBox "DeleteDuplicateInterpretations(): Could not find one or more columns: " _
-            & "case number, employee, or interpretation dt."
+            & "case number, employee, specimen type, or interpretation dt."
         End
     End If
   Next i
 
-
-  'create case-employee column
-  ws.Cells(1, lc + 1).Value = "CASE_EMPLOYEE"
-  lc = LastCol(ws)
-  ws.Cells(2, lc).Formula = "=RC[" & caseCol - lc & "]&RC[" & empCol - lc & "]"
-  ws.Cells(2, lc).AutoFill Destination:=Range(ws.Cells(2, lc), ws.Cells(lr, lc))
+  'Search backwards from last column to see if uniqueID column has been created.
+  'if not, create uniqueID (case_employee) column
+  For i = 0 To lc - 1
+    If (ws.Cells(1, lc - i).Value = uniqueID) Then
+        Exit For
+    ElseIf i = lc - 1 Then
+        ws.Cells(1, lc + 1).Value = uniqueID
+        lc = LastCol(ws)
+        ws.Cells(2, lc).Formula = "=Left(RC[" & caseCol - lc & "],9)&RC[" & spectypeCol - lc & "]&RC[" & empCol - lc & "]"
+        ws.Cells(2, lc).AutoFill Destination:=Range(ws.Cells(2, lc), ws.Cells(lr, lc))
+    End If
+  Next i
   
   'sort by case-person ascending (Y) and then by interp date descending (P)
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Clear
-    ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range("Y1") _
+    ' sort on CASE_EMPLOYEE
+    ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range(ws.Cells(2, lc), ws.Cells(lr, lc)) _
         , SortOn:=xlSortOnValues, Order:=xlAscending, DataOption:=xlSortNormal
-    ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range("P1") _
+    ' sort on interpretation date and time
+    ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range(ws.Cells(2, intDTCol), ws.Cells(lr, intDTCol)) _
         , SortOn:=xlSortOnValues, Order:=xlDescending, DataOption:=xlSortNormal
     With ActiveWorkbook.Worksheets("Data").Sort
-        .SetRange Range("A:Y")
+        .SetRange Range(ws.Cells(1, 1), ws.Cells(lr, lc))
         .Header = xlYes
         .MatchCase = False
         .Orientation = xlTopToBottom
@@ -336,7 +348,7 @@ Sub DeleteDuplicateInterpretations()
     End With
   
   'remove duplicates based on case-person column (will delete second entries leaving the most recent which is sorted at top)
-  Range("A1:Y" & lr).RemoveDuplicates Columns:=Array(25)
+  Range(ws.Cells(2, 1), ws.Cells(lr, lc)).RemoveDuplicates Columns:=Array(lc)
   
 End Sub
 
@@ -352,6 +364,7 @@ End Function
 
 Sub InsertHPVOverall()
 
+    'inserthpvoverall() is only run if there are no mankato cases in the spreadsheet.
     With Application
     .Calculation = xlCalculationManual
     .ScreenUpdating = False
@@ -361,21 +374,31 @@ Sub InsertHPVOverall()
     Dim ws As Worksheet, lr As Long, lc As Long, colName As String, i As Integer
     Dim HPV16Col As Long, HPV18Col As Long, HPVOthCol As Long
             
-    colName = "HPVOverall (GR/GA)"
-    ws = ActiveWorkbook.Worksheets("Data")
+    colName = "HPVOverall"                      'if this name changes, it must also change in PTHPVbyDx and PTASCUSHPV
+    Set ws = ActiveWorkbook.Worksheets("Data")
     lr = LastRow(ws)
     lc = LastCol(ws)
     
+    'search columns backwards for if overall hpv column already exists, if so, delete
+    For i = 0 To lc - 1
+        If ws.Cells(1, lc - i).Value = colName Then
+            ws.Range(ws.Cells(1, lc - i), ws.Cells(1, lc - i)).EntireColumn.Delete
+            lc = LastCol(ws)
+            Exit For
+        End If
+    Next i
+        
+    ' column location invariant overall placement
     For i = 1 To lc
         If ws.Cells(1, i).Value = "HPV16" Then
             HPV16Col = i
         ElseIf ws.Cells(1, i).Value = "HPV18" Then
             HPV18Col = i
         ElseIf ws.Cells(1, i).Value = "HPVOTHER" Then
-            HPV18Col = i
+            HPVOthCol = i
         ElseIf (HPV16Col > 0) And (HPV18Col > 0) And (HPVOthCol > 0) Then
             Exit For
-        Else
+        ElseIf i = lc Then
             MsgBox "InsertHPVOverall(): Could not find one or more columns: " _
                 & "HPV16, HPV18, or HPVOTHER."
             End
@@ -383,32 +406,7 @@ Sub InsertHPVOverall()
     Next i
     
     ws.Cells(1, lc + 1).Value = colName
-    Range(ws.Cells(2, lc + 1), ws.Cells(lr, lc + 1)).FormulaR1C1 = "=IF(OR(RC[" & lc - HPV16Col & "]=""Positive"",OR(RC[" & lc - HPV18Col & "]=""Positive"",RC[" & lc - HPVOthCol & "]=""Positive"")),""Positive"",IF(OR(RC[" & lc - HPV16Col & "]=""Negative"",OR(RC[" & lc - HPV18Col & "]=""Negative"",RC[" & lc - HPVOthCol & "]=""Negative"")),""Negative"",0))"
-               
-    ' this is the old static column placement, dependent on how the report places columns
-    'If CheckHPV("S1") Then
-    '    If IsEmpty(Range("Z1")) Then
-    '        'formula here
-    '        Range("Z1").Value = colName
-    '        Range("Z2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
-    '    Else
-    '    If IsEmpty(Range("AA1")) And (Range("Z1") <> colName) Then
-    '        'MsgBox "Z1 was not empty, entered next IF statement"
-    '        Range("AA1").Value = "HPVOverall"
-    '        Range("AA2", "AA" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
-    '        End If
-    '
-    '    End If
-    'Else
-    'If CheckHPV("T1") = True Then
-    '    If (IsEmpty(Range("AA1")) = True) And (Range("Z1") <> colName) Then
-    '        Range("AA1").Value = "HPVOverall"
-    '        Range("AA2", "Z" & lr).FormulaR1C1 = "=IF(OR(RC[-7]=""Positive"",OR(RC[-6]=""Positive"",RC[-5]=""Positive"")),""Positive"",IF(OR(RC[-7]=""Negative"",OR(RC[-6]=""Negative"",RC[-5]=""Negative"")),""Negative"",0))"
-    '        End If
-   '
-   '     'MsgBox "checkhpv returned false, hpv16 not in column 19/S or 20/T"
-   '     End If
-   ' End If
+    Range(ws.Cells(2, lc + 1), ws.Cells(lr, lc + 1)).FormulaR1C1 = "=IF(OR(RC" & HPV16Col & "=""Positive"",OR(RC" & HPV18Col & "=""Positive"",RC" & HPVOthCol & "=""Positive"")),""Positive"",IF(OR(RC" & HPV16Col & "=""Negative"",OR(RC" & HPV18Col & "=""Negative"",RC" & HPVOthCol & "=""Negative"")),""Negative"",0))"
     
     With Application
     .Calculation = xlCalculationAutomatic
@@ -1342,7 +1340,9 @@ Sub PTCTAgreement()
         .PivotItems("GYN AGUS").Position = 7
         .PivotItems("GYN AIS").Position = 8
         .PivotItems("GYN CANCER").Position = 9
+        .Orientation = xlHidden
     End With
+    
     
     'Add column/row fields and filters
     With pt.PivotFields("EMPLOYEE TYPE")
@@ -1353,17 +1353,21 @@ Sub PTCTAgreement()
         .Orientation = xlRowField
         .Position = 2
     End With
+    With pt.PivotFields("DIAGNOSIS CATEGORY")
+        .Orientation = xlRowField
+        .Position = 3 '4 because of diagnosis category setup will place it at 3.  This should go after.
+    End With
     With pt.PivotFields("FINAL DIAGNOSIS")
         .Orientation = xlRowField
         .Position = 4 '4 because of diagnosis category setup will place it at 3.  This should go after.
     End With
-    With pt.PivotFields("INTERPRETATION DT")
+    With pt.PivotFields("CASE NUMBER")
         .Orientation = xlRowField
         .Position = 5
     End With
-    With pt.PivotFields("CASE NUMBER")
+    With pt.PivotFields("INTERPRETATION DT")
         .Orientation = xlRowField
-        .Position = 6
+        .Position = 7
     End With
     With pt.PivotFields("QUALITY CODE")
         .Orientation = xlColumnField
@@ -1398,19 +1402,26 @@ Sub PTCTAgreement()
         Else: pi.Visible = False
         End If
     Next pi
-
-    pt.PivotFields("EMPLOYEE").ShowDetail = False
     
-    'hide blanks
+    'hide GYN UNSAT and other diagnoses irrelevant to rescreen
     For Each pi In pt.PivotFields("DIAGNOSIS CATEGORY").PivotItems
-        If (pi.Value = "(blank)") Then
-            pi.Visible = False
-        Else: pi.Visible = True
+        If (pi.Value = "GYN NIL") Or (pi.Value = "GYNNOEC") Or (pi.Value = "GYN ORG") Then
+            pi.Visible = True
+        Else: pi.Visible = False
         End If
     Next pi
     
+    pt.PivotFields("CASE NUMBER").ShowDetail = False
+    pt.PivotFields("FINAL DIAGNOSIS").ShowDetail = False
+    pt.PivotFields("EMPLOYEE").ShowDetail = False
+    
     'add interp count by case number and collapse to employee
     pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
+    
+    With pt.PivotFields("CASE NUMBER")
+        .Orientation = xlRowField
+        .Position = 5
+    End With
     
     pt.PivotSelect ("")
     Charts.Add
@@ -1474,12 +1485,18 @@ Sub PTCTAgreement()
         "DIAGNOSIS CATEGORY", 253.5, 658.5, 144, 187.5
     ActiveWorkbook.SlicerCaches.Add2(ActiveChart.PivotLayout.PivotTable, _
         "QUALITY CODE").Slicers.Add ActiveSheet, , "QUALITY CODE", "QUALITY CODE", _
-        294.75, 765.75, 144, 187.5
+        319.5, 696, 144, 187.5
+    ActiveWorkbook.SlicerCaches.Add2(ActiveChart.PivotLayout.PivotTable, _
+        "QUALITY REASON").Slicers.Add ActiveSheet, , "QUALITY REASON", "QUALITY REASON" _
+        , 385.5, 733.5, 144, 187.5
     
     Range("A1").Select
     ActiveWorkbook.ShowPivotTableFieldList = False
     
-    Range("F50").Value = ""
+    Range("F50").Value = "MCR: Quality Reason (blanks) represent late HPV entries and some training cases"
+    Range("F51").Value = "All Sites: Drill down to look at diagnostic categories (what was changed to what). Expanding once displays Cytotech DxCategory followed by the nested list of what those cases were signed out as."
+    Range("F52").Value = "All Sites: If a diagnosis is changed by the original cytotech before rescreen, the QA code is generated off of comparison to the first.  This means that you may see in this report CYMINOR on a case that was called NIL and changed to NIL.  The cytotech may have initially called it NOEC."
+    Range("G53").Value = "To view this change in greater detail, go into processing history and click the ellipsis to the right of the diagnosis change."
     
 End Sub
 
