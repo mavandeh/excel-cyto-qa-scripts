@@ -51,9 +51,14 @@ Sub ValidateRequestingDoctor()
     
     Set ws = ActiveWorkbook.Worksheets("Sheet1")
     
+    With Application
+        '.Calculation = xlCalculationManual
+        .ScreenUpdating = False
+    End With
+    
     'find REQUESTING DOCTOR column
     For i = 1 To LastCol(ws)
-        If ws.Cells(1, i).Value = "REQUESTING DOCTOR" Then
+        If (ws.Cells(1, i).Value = "REQUESTING DOCTOR") Then
             reqDocCol = i
             Exit For
         ElseIf (i = LastCol(ws)) And (reqDocCol = 0) Then
@@ -64,7 +69,7 @@ Sub ValidateRequestingDoctor()
     
     'find REQUESTING DOCTOR VALIDATED column, if it exists, clear it
     For i = 1 To LastCol(ws)
-        If ws.Cells(1, i).Value = "REQUESTING DOCTOR VALIDATED" Then
+        If (ws.Cells(1, i).Value = "REQUESTING DOCTOR VALIDATED") Or (ws.Cells(1, i).Value = "REQ DOC LNAME") Then
             ws.Columns(i).Clear
         End If
     Next i
@@ -84,6 +89,10 @@ Sub ValidateRequestingDoctor()
     ws.Cells(2, LastCol(ws)).Formula = "=LEFT(RC[-" & relRef & "], FIND(CHAR(44), RC[-" & relRef & "]))" _
         & "&MID(RC[-" & relRef & "], FIND(CHAR(44),RC[-" & relRef & "])+1,FIND(CHAR(32),RC[-" & relRef & "],FIND(CHAR(44),RC[-" & relRef & "])+2)-FIND(CHAR(44),RC[-" & relRef & "]))"
     
+    ws.Cells(1, LastCol(ws) + 1).Value = "REQ DOC LNAME"
+    relRef = LastCol(ws) - reqDocCol
+    ws.Cells(2, LastCol(ws)).Formula = "=LEFT(RC[-" & relRef & "], FIND(CHAR(44), RC[-" & relRef & "])-1)"
+    
     'find first comma to end last name, find first space to start first name, position of second space minus position of first space +1 is length of first name
     '=LEFT(RC[-7], FIND(CHAR(44), RC[-7]))&MID(RC[-7], FIND(CHAR(32),RC[-7]),FIND(CHAR(32),RC[-7],FIND(CHAR(32),RC[-7])+1)-FIND(CHAR(32),RC[-7]))
     
@@ -92,17 +101,105 @@ Sub ValidateRequestingDoctor()
     '      &MID(RC[-7],              FIND(CHAR(44),RC[-7             ])+1,FIND(CHAR(32),RC[-7             ],FIND(CHAR(44),RC[-7             ])+2)-FIND(CHAR(32),RC[-7]))
     
     'fill to last row
+    ws.Cells(2, LastCol(ws) - 1).AutoFill Destination:=Range(ws.Cells(2, LastCol(ws) - 1), ws.Cells(LastRow(ws), LastCol(ws) - 1))
     ws.Cells(2, LastCol(ws)).AutoFill Destination:=Range(ws.Cells(2, LastCol(ws)), ws.Cells(LastRow(ws), LastCol(ws)))
-    ws.Cells(2, LastCol(ws) + 1).AutoFill Destination:=Range(ws.Cells(2, LastCol(ws) + 1), ws.Cells(LastRow(ws), LastCol(ws) + 1))
+
     
     'copy and paste values, comment out to troubleshoot formula
-    With ws.Range(ws.Cells(2, LastCol(ws)), ws.Cells(LastRow(ws), LastCol(ws)))
+    With ws.Range(ws.Cells(2, LastCol(ws) - 1), ws.Cells(LastRow(ws), LastCol(ws)))
         .Copy
         .PasteSpecial xlPasteValues
     End With
     
-    Application.CutCopyMode = False
+    With Application
+        .Calculation = xlCalculationAutomatic
+        .CutCopyMode = False
+        .ScreenUpdating = True
+    End With
+    
        
+End Sub
+
+Sub MayoDocFilters()
+
+    Dim enterSub As Integer
+    enterSub = MsgBox("Would you like to filter Mayo data based on a last name list?", vbYesNo)
+    If enterSub = vbNo Then Exit Sub
+    
+    Dim wb As Workbook, ws As Worksheet, ptws As Worksheet, pt As PivotTable, pi As PivotItem, pf As PivotField, i As Long
+    Dim reqDocCol As Long, fSheetName As String, fws As Worksheet
+            
+    fSheetName = "MayoDocFilters"
+        
+    Set wb = ActiveWorkbook
+    Set ws = wb.Worksheets("Sheet1")
+    Set ptws = wb.Worksheets("MayoClinBenchmarks")
+
+    With Application
+        '.Calculation = xlCalculationManual
+        .ScreenUpdating = False
+    End With
+        
+    'find REQUESTING DOCTOR VALIDATED column
+    For i = 1 To LastCol(ws)
+        If ws.Cells(1, i).Value = "REQUESTING DOCTOR VALIDATED" Then
+            reqDocCol = i
+            Exit For
+        ElseIf (i = LastCol(ws)) And (reqDocCol = 0) Then
+            MsgBox "Could not find REQUESTING DOCTOR VALIDATED field.  Please re-run BuildPT or ValidateRequestingDoctor."
+            Exit Sub
+        End If
+    Next i
+    
+    Dim n As Long, count As Long, qF As Boolean
+    n = wb.Worksheets.count
+    count = 1
+    Set ws = Nothing
+        
+    For Each ws In wb.Sheets
+        If ws.name = fSheetName Then
+            Set fws = ws
+            Exit For
+        ElseIf (count = n) And Not qF Then
+            wb.Sheets.Add
+            ActiveSheet.name = fSheetName
+            ws.Range("A1").Value = "REQUESTING DOCTOR VALIDATED"
+            
+            MsgBox "MayoDocFilters sheet created.  Please paste Mayo doctor last names in the column indicated and re-run BuildPT or PTMayoClinicianResults."
+            Exit Sub
+            
+        End If
+        count = count + 1
+    Next ws
+    
+    'other ideas for string processing: lcase (works without), remove spaces and hyphens
+    For Each pt In ptws.PivotTables
+        With pt.PivotFields("REQ DOC LNAME")
+            .ClearAllFilters
+            For Each pi In .PivotItems
+                pi.Visible = WorksheetFunction.CountIf(Range(fws.Cells(2, 1), fws.Cells(LastRow(fws), 1)), pi.name) > 0
+            Next pi
+        End With
+    Next pt
+    
+    'way too slow
+    'For Each pt In ptws.PivotTables
+    '    For Each pi In pt.PivotFields("REQUESTING DOCTOR VALIDATED").PivotItems
+    '        For i = 2 To LastRow(wb.Worksheets(fSheetName))
+    '            If Left(pi.Value, InStr(pi.Value, Chr(44))) = Cells(i, 1) Then
+    '                pi.Visible = True
+    '            Else
+    '                pi.Visible = False
+    '            End If
+    '        Next i
+    '    Next pi
+    'Next pt
+    
+    With Application
+        '.Calculation = xlCalculationAutomatic
+        .ScreenUpdating = True
+    End With
+        
 End Sub
 
 Sub PTMayoClinicianResults()
@@ -122,6 +219,7 @@ Sub PTMayoClinicianResults()
     
     DeleteTitles
     ValidateRequestingDoctor
+    
     
     On Error Resume Next
     Application.DisplayAlerts = False
@@ -168,6 +266,11 @@ Sub PTMayoClinicianResults()
         .Position = 1
     End With
     pt.PivotFields("REQUESTING DOCTOR VALIDATED").ShowDetail = False
+    
+    With pt.PivotFields("REQ DOC LNAME")
+        .Orientation = xlPageField
+        .Position = 1
+    End With
 
     'add interp count by case number and collapse to employee
     pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
@@ -200,6 +303,11 @@ Sub PTMayoClinicianResults()
     End With
     With pt2.PivotFields("NORMAL / ABNORMAL")
         .Orientation = xlColumnField
+        .Position = 1
+    End With
+
+    With pt2.PivotFields("REQ DOC LNAME")
+        .Orientation = xlPageField
         .Position = 1
     End With
 
@@ -292,13 +400,11 @@ Sub PTMayoClinicianResults()
         pTable.PivotFields("DIAGNOSIS CATEGORY").PivotItems("(blank)").Visible = False
         
     Next pTable
-
-    'ws.Rows(1).SpecialCells(xlCellTypeBlanks, XlCellType).Select
-    
-    'zASCtoSIL deleted to next line
     
 '    Range("A1").Select
     ActiveWorkbook.ShowPivotTableFieldList = False
+    
+    MayoDocFilters
     
 End Sub
 
@@ -509,7 +615,7 @@ End Sub
 Sub RowSizeZoom()
   Dim ws As Worksheet
   For Each ws In ActiveWorkbook.Worksheets
-    ws.Range("A2:A" & ws.Rows.Count).rowHeight = 12.75
+    ws.Range("A2:A" & ws.Rows.count).rowHeight = 12.75
     ws.Activate
     ActiveWindow.Zoom = 85
   Next ws
