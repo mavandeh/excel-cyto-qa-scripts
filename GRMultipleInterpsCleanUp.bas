@@ -948,9 +948,9 @@ Sub PTHPVbyDx()
 
 ' https://www.mrexcel.com/forum/excel-questions/785527-macro-create-pivot-table-dynamic-data-range.html
 
-    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem
-    Dim name As String, ptName As String, cTitle As String, cLoc As String, i As Long
-    
+    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem, ws As Worksheet
+    Dim name As String, ptName As String, cTitle As String, cLoc As String, i As Long, hpvColName As String
+        
     name = "HPVbyDx"
     ptName = "PT" & name
     cTitle = "HPV Results by Diagnosis"
@@ -963,6 +963,7 @@ Sub PTHPVbyDx()
     Application.DisplayAlerts = True
     
     Worksheets("Data").Activate
+    Set ws = ActiveSheet
     Set PCache = ActiveWorkbook.PivotCaches.Create(SourceType:=1, SourceData:=Range("A1").CurrentRegion.Address)
     Worksheets.Add
     With ActiveSheet
@@ -972,6 +973,26 @@ Sub PTHPVbyDx()
     
     Set pt = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=Range("A1"), TableName:=ptName)
 
+    'loop through all rows looking at accession classes to determine if data is mixed or MCHS or MCR/MCA only
+
+    Dim mankato As Boolean, mcra As Boolean
+    For i = 1 To LastRow(ws)
+        If i > 1 Then ws.Cells(i, 1) = Left(ws.Cells(i, 1), 9)
+        If (Left(ws.Cells(i, 1).Value, 2) = "GM") Then
+            mankato = True
+            hpvColName = "HPVOTHER"
+        ElseIf (Left(ws.Cells(i, 1).Value, 2) = "GA") Or (Left(ws.Cells(i, 1).Value, 2) = "GR") Then
+            mcra = True
+            hpvColName = "HPVOVERALL"
+        End If
+        If mcra And mankato Then
+            'results are incompatible because test code is different.
+            MsgBox "Sheet contains data with both GM and GR/GA cases.  HPV results are incompatible. " _
+                & "Please rerun report including only filters for GM/HPVG or GR/GA/HPV and " _
+                & "Pap test codes."
+            End
+        End If
+    Next i
 
     With pt.PivotFields("DIAGNOSIS CATEGORY")
         .Orientation = xlRowField
@@ -1016,20 +1037,18 @@ Sub PTHPVbyDx()
         .Orientation = xlRowField
         .Position = 5
     End With
-    With pt.PivotFields("HPVOverall")
+    With pt.PivotFields(hpvColName)
         .Orientation = xlColumnField
         .Position = 1
+        .PivotItems("Positive").Position = 1
+        .PivotItems("Negative").Position = 2
     End With
     With pt.PivotFields("TEST CODE")
         .Orientation = xlPageField
         .Position = 1
     End With
-    
-    With pt.PivotFields("HPVOverall")
-        .PivotItems("Positive").Position = 1
-        .PivotItems("Negative").Position = 2
-    End With
-    For Each pi In pt.PivotFields("HPVOverall").PivotItems
+
+    For Each pi In pt.PivotFields(hpvColName).PivotItems
         If (pi.Value = "Positive") Or (pi.Value = "Negative") Then
             pi.Visible = True
         Else: pi.Visible = False
@@ -1112,9 +1131,9 @@ Sub PTASCUSHPV()
 
 ' https://www.mrexcel.com/forum/excel-questions/785527-macro-create-pivot-table-dynamic-data-range.html
 
-    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem
-    Dim name As String, ptName As String, cTitle As String, cLoc As String, i As Long
-    
+    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem, ws As Worksheet
+    Dim name As String, ptName As String, cTitle As String, cLoc As String, i As Long, hpvColName As String
+        
     name = "ASCUSHPV"                                       'Pivot table and tab name
     ptName = "PT" & name
     cTitle = "HPV Results for ASCUS Cases by Pathologist"   'chart title
@@ -1127,14 +1146,36 @@ Sub PTASCUSHPV()
     Application.DisplayAlerts = True
     
     Worksheets("Data").Activate
+    Set ws = ActiveSheet
     Set PCache = ActiveWorkbook.PivotCaches.Create(SourceType:=1, SourceData:=Range("A1").CurrentRegion.Address)
     Worksheets.Add
     With ActiveSheet
         .name = name
         .Tab.Color = RGB(112, 173, 71)
     End With
+
     
     Set pt = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=Range("A1"), TableName:=ptName)
+    
+    'loop through all rows looking at accession classes to determine if data is mixed or MCHS or MCR/MCA only
+    Dim mankato As Boolean, mcra As Boolean
+    For i = 1 To LastRow(ws)
+        If i > 1 Then ws.Cells(i, 1) = Left(ws.Cells(i, 1), 9)
+        If (Left(ws.Cells(i, 1).Value, 2) = "GM") Then
+            mankato = True
+            hpvColName = "HPVOTHER"
+        ElseIf (Left(ws.Cells(i, 1).Value, 2) = "GA") Or (Left(ws.Cells(i, 1).Value, 2) = "GR") Then
+            mcra = True
+            hpvColName = "HPVOVERALL"
+        End If
+        If mcra And mankato Then
+            'results are incompatible because test code is different.
+            MsgBox "Sheet contains data with both GM and GR/GA cases.  HPV results are incompatible. " _
+                & "Please rerun report including only filters for GM/HPVG or GR/GA/HPV and " _
+                & "Pap test codes."
+            End
+        End If
+    Next i
 
     'Diagnosis category setup.  1) Add diagnosis category to PT
     With pt.PivotFields("DIAGNOSIS CATEGORY")
@@ -1182,23 +1223,19 @@ Sub PTASCUSHPV()
         .Orientation = xlRowField
         .Position = 5
     End With
-    With pt.PivotFields("HPVOverall")
+    With pt.PivotFields(hpvColName)
         .Orientation = xlColumnField
         .Position = 1
+        .PivotItems("Positive").Position = 1
+        .PivotItems("Negative").Position = 2
     End With
     With pt.PivotFields("TEST CODE")
         .Orientation = xlPageField
         .Position = 1
     End With
     
-    'Sort HPV results so Positive appears at the bottom of the chart.
-    With pt.PivotFields("HPVOverall")
-        .PivotItems("Positive").Position = 1
-        .PivotItems("Negative").Position = 2
-    End With
-    
     'Filter out all HPV results other than Positive and Negative
-    For Each pi In pt.PivotFields("HPVOverall").PivotItems
+    For Each pi In pt.PivotFields(hpvColName).PivotItems
         If (pi.Value = "Positive") Or (pi.Value = "Negative") Then
             pi.Visible = True
         Else: pi.Visible = False
@@ -1814,3 +1851,4 @@ Sub GeneratePT()
     PTCTAgreement
     PTCTPathAgreement
 End Sub
+
