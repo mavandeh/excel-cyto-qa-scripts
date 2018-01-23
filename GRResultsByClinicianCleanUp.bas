@@ -163,9 +163,10 @@ Sub MayoDocFilters()
         ElseIf (count = n) And Not qF Then
             wb.Sheets.Add
             ActiveSheet.name = fSheetName
-            ws.Range("A1").Value = "REQUESTING DOCTOR VALIDATED"
+            Set fws = Worksheets(fSheetName)
+            fws.Range("A1").Value = "REQ DOC LNAME LIST BELOW"
             
-            MsgBox "MayoDocFilters sheet created.  Please paste Mayo doctor last names in the column indicated and re-run BuildPT or PTMayoClinicianResults."
+            MsgBox "MayoDocFilters sheet created.  Please paste Mayo doctor last names in the column indicated and re-run MayoDocFilter or PTMayoClinicianResults to filter."
             Exit Sub
             
         End If
@@ -623,8 +624,8 @@ Sub RowSizeZoom()
 End Sub
 
 Sub BuildPT()
-    PTMayoClinicianResults
     PTMMLClinicianResults
+    PTMayoClinicianResults
     RowSizeZoom
 End Sub
 
