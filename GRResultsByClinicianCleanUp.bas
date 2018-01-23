@@ -33,7 +33,7 @@ Sub DeleteTitles()
 
     Set ws = ActiveWorkbook.Worksheets("Sheet1")
     lr = LastRow(ws)
-     
+    
     With ws
         If Range("A1").Value = "PathDx Cytology Results by Clinician" Then
             Range("A1").SpecialCells(xlCellTypeVisible).EntireRow.Delete
@@ -43,6 +43,66 @@ Sub DeleteTitles()
         End If
     End With
     
+End Sub
+
+Sub ValidateRequestingDoctor()
+    Dim ws As Worksheet, i As Long
+    Dim reqDocCol As Long
+    
+    Set ws = ActiveWorkbook.Worksheets("Sheet1")
+    
+    'find REQUESTING DOCTOR column
+    For i = 1 To LastCol(ws)
+        If ws.Cells(1, i).Value = "REQUESTING DOCTOR" Then
+            reqDocCol = i
+            Exit For
+        ElseIf (i = LastCol(ws)) And (reqDocCol = 0) Then
+            MsgBox "Could not find REQUESTING DOCTOR field.  Verify that there is a column named REQUESTING DOCTOR in Sheet1."
+            Exit Sub
+        End If
+    Next i
+    
+    'find REQUESTING DOCTOR VALIDATED column, if it exists, clear it
+    For i = 1 To LastCol(ws)
+        If ws.Cells(1, i).Value = "REQUESTING DOCTOR VALIDATED" Then
+            ws.Columns(i).Clear
+        End If
+    Next i
+    
+    'append space onto end of REQUESTING DOCTOR value if the last char is not a space
+    For i = 2 To LastRow(ws)
+        If (Right(ws.Cells(i, reqDocCol).Value, 1) <> " ") Then
+            ws.Cells(i, reqDocCol).Value = ws.Cells(i, reqDocCol).Value & " "
+        End If
+    Next i
+        
+    'set up requesting doctor column for data validation
+    Dim relRef As Long
+    
+    ws.Cells(1, LastCol(ws) + 1).Value = "REQUESTING DOCTOR VALIDATED"
+    relRef = LastCol(ws) - reqDocCol
+    ws.Cells(2, LastCol(ws)).Formula = "=LEFT(RC[-" & relRef & "], FIND(CHAR(44), RC[-" & relRef & "]))" _
+        & "&MID(RC[-" & relRef & "], FIND(CHAR(44),RC[-" & relRef & "])+1,FIND(CHAR(32),RC[-" & relRef & "],FIND(CHAR(44),RC[-" & relRef & "])+2)-FIND(CHAR(44),RC[-" & relRef & "]))"
+    
+    'find first comma to end last name, find first space to start first name, position of second space minus position of first space +1 is length of first name
+    '=LEFT(RC[-7], FIND(CHAR(44), RC[-7]))&MID(RC[-7], FIND(CHAR(32),RC[-7]),FIND(CHAR(32),RC[-7],FIND(CHAR(32),RC[-7])+1)-FIND(CHAR(32),RC[-7]))
+    
+    'find first comma to end last name, find first comma to start first name, position of last space minus position of comma +2 is length of first name
+    '=LEFT(RC[-7], FIND(CHAR(44), RC[-7]))
+    '      &MID(RC[-7],              FIND(CHAR(44),RC[-7             ])+1,FIND(CHAR(32),RC[-7             ],FIND(CHAR(44),RC[-7             ])+2)-FIND(CHAR(32),RC[-7]))
+    
+    'fill to last row
+    ws.Cells(2, LastCol(ws)).AutoFill Destination:=Range(ws.Cells(2, LastCol(ws)), ws.Cells(LastRow(ws), LastCol(ws)))
+    ws.Cells(2, LastCol(ws) + 1).AutoFill Destination:=Range(ws.Cells(2, LastCol(ws) + 1), ws.Cells(LastRow(ws), LastCol(ws) + 1))
+    
+    'copy and paste values, comment out to troubleshoot formula
+    With ws.Range(ws.Cells(2, LastCol(ws)), ws.Cells(LastRow(ws), LastCol(ws)))
+        .Copy
+        .PasteSpecial xlPasteValues
+    End With
+    
+    Application.CutCopyMode = False
+       
 End Sub
 
 Sub PTMayoClinicianResults()
@@ -61,6 +121,7 @@ Sub PTMayoClinicianResults()
     Set Sheet1 = Worksheets("Sheet1")
     
     DeleteTitles
+    ValidateRequestingDoctor
     
     On Error Resume Next
     Application.DisplayAlerts = False
@@ -84,7 +145,7 @@ Sub PTMayoClinicianResults()
         .Orientation = xlRowField
         .Position = 1
     End With
-    With pt.PivotFields("REQUESTING DOCTOR")
+    With pt.PivotFields("REQUESTING DOCTOR VALIDATED")
         .Orientation = xlRowField
         .Position = 2
     End With
@@ -106,7 +167,7 @@ Sub PTMayoClinicianResults()
         .Orientation = xlColumnField
         .Position = 1
     End With
-    pt.PivotFields("REQUESTING DOCTOR").ShowDetail = False
+    pt.PivotFields("REQUESTING DOCTOR VALIDATED").ShowDetail = False
 
     'add interp count by case number and collapse to employee
     pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
@@ -118,7 +179,7 @@ Sub PTMayoClinicianResults()
         .Orientation = xlRowField
         .Position = 1
     End With
-    With pt2.PivotFields("REQUESTING DOCTOR")
+    With pt2.PivotFields("REQUESTING DOCTOR VALIDATED")
         .Orientation = xlRowField
         .Position = 2
     End With
@@ -130,7 +191,7 @@ Sub PTMayoClinicianResults()
         .Orientation = xlRowField
         .Position = 4
     End With
-    pt2.PivotFields("REQUESTING DOCTOR").ShowDetail = False
+    pt2.PivotFields("REQUESTING DOCTOR VALIDATED").ShowDetail = False
     
     'Diagnosis Category Setup
     With pt2.PivotFields("DIAGNOSIS CATEGORY")
@@ -284,7 +345,7 @@ Sub PTMMLClinicianResults()
         .Orientation = xlRowField
         .Position = 2
     End With
-    With pt.PivotFields("REQUESTING DOCTOR")
+    With pt.PivotFields("REQUESTING DOCTOR VALIDATED")
         .Orientation = xlRowField
         .Position = 3
     End With
@@ -306,7 +367,7 @@ Sub PTMMLClinicianResults()
         .Orientation = xlColumnField
         .Position = 1
     End With
-    pt.PivotFields("REQUESTING DOCTOR").ShowDetail = False
+    pt.PivotFields("REQUESTING DOCTOR VALIDATED").ShowDetail = False
 
     'add interp count by case number and collapse to employee
     pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
@@ -322,7 +383,7 @@ Sub PTMMLClinicianResults()
         .Orientation = xlRowField
         .Position = 2
     End With
-    With pt2.PivotFields("REQUESTING DOCTOR")
+    With pt2.PivotFields("REQUESTING DOCTOR VALIDATED")
         .Orientation = xlRowField
         .Position = 3
     End With
@@ -334,7 +395,7 @@ Sub PTMMLClinicianResults()
         .Orientation = xlRowField
         .Position = 5
     End With
-    pt2.PivotFields("REQUESTING DOCTOR").ShowDetail = False
+    pt2.PivotFields("REQUESTING DOCTOR VALIDATED").ShowDetail = False
     
     'Diagnosis Category Setup
     With pt2.PivotFields("DIAGNOSIS CATEGORY")
@@ -433,7 +494,7 @@ Sub PTMMLClinicianResults()
         
         'hide blanks
         pTable.PivotFields("DIAGNOSIS CATEGORY").PivotItems("(blank)").Visible = False
-        
+        pTable.PivotFields("DIAGNOSIS CATEGORY").PivotItems("(blank)").Visible = False
     Next pTable
     
     ws.Rows(1).SpecialCells(xlCellTypeBlanks).Select
