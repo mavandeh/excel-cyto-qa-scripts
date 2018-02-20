@@ -1,4 +1,4 @@
-Attribute VB_Name = "GRResultsByClinicianCleanUp"
+Attribute VB_Name = "PDxResByClin"
 Option Explicit
 
 Function LastRow(sh As Worksheet)
