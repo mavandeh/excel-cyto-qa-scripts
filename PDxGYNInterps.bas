@@ -5,14 +5,14 @@ Attribute VB_Name = "PDxGYNInterps"
 
 Option Explicit
 
-Sub UnmergeAll()
+Private Sub UnmergeAll()
   Dim currentSheet As Worksheet
   For Each currentSheet In Worksheets
     currentSheet.Cells.unmerge
   Next
 End Sub
 
-Sub DeleteEmptyRows()
+Private Sub DeleteEmptyRows()
   Dim currentSheet As Worksheet
   For Each currentSheet In Worksheets
     On Error Resume Next
@@ -46,7 +46,7 @@ Function LastCol(sh As Worksheet)
     On Error GoTo 0
 End Function
 
-Sub CopyRangeFromMultiWorksheets()
+Private Sub CopyRangeFromMultiWorksheets()
 
     ' Modified from https://msdn.microsoft.com/en-us/library/cc793964(v=office.12).aspx
     Dim sh As Worksheet
@@ -115,7 +115,7 @@ ExitTheSub:
     End With
 End Sub
 
-Sub HideSheets()
+Private Sub HideSheets()
     Dim sh As Worksheet
     For Each sh In ActiveWorkbook.Worksheets
         If Left(sh.name, 5) = "Sheet" Then
@@ -124,7 +124,7 @@ Sub HideSheets()
     Next sh
 End Sub
 
-Sub SortData()
+Private Sub SortData()
     ' created from macro recording and modified
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Clear
     ActiveWorkbook.Worksheets("Data").Sort.SortFields.Add Key:=Range("A1") _
@@ -146,7 +146,7 @@ Sub SortData()
     
 End Sub
 
-Sub UpdateHPVResults()
+Private Sub UpdateHPVResults()
   
   With Application
     .Calculation = xlCalculationManual
@@ -154,7 +154,7 @@ Sub UpdateHPVResults()
     .ReferenceStyle = xlR1C1
   End With
 
-    Dim HPV16Col As Integer, mankato As Boolean, mcra As Boolean, ws As Worksheet, i As Integer
+    Dim HPV16Col As Integer, mankato As Boolean, mcra As Boolean, ws As Worksheet, i As Long
         
     Set ws = ActiveWorkbook.Worksheets("Data")
     'find the hpv16 column and store the index
@@ -247,11 +247,11 @@ Sub UpdateHPVResults()
     
 End Sub
 
-Sub RenameSheet()
+Private Sub RenameSheet()
     ActiveSheet.name = "Data"
 End Sub
 
-Sub DeleteHPVLines()
+Private Sub DeleteHPVLines()
 
     ' Modified from https://danwagner.co/how-to-delete-rows-with-range-autofilter/
     Dim ws As Worksheet, lr As Long, lc As Long
@@ -283,7 +283,7 @@ Sub DeleteHPVLines()
   
 End Sub
 
-Sub DeleteDuplicateInterpretations()
+Private Sub DeleteDuplicateInterpretations()
 
   ' Original code utilizing LastRow() Function from MSDN above.
 
@@ -352,7 +352,7 @@ Sub DeleteDuplicateInterpretations()
   
 End Sub
 
-Function CheckHPV(rng As String) As Boolean
+Private Function CheckHPV(rng As String) As Boolean
 
   If Range(rng) = "HPV16" Then
   CheckHPV = True
@@ -362,7 +362,7 @@ Function CheckHPV(rng As String) As Boolean
   
 End Function
 
-Sub InsertHPVOverall()
+Private Sub InsertHPVOverall()
 
     'inserthpvoverall() is only run if there are no mankato cases in the spreadsheet.
     With Application
@@ -415,7 +415,7 @@ Sub InsertHPVOverall()
 
 End Sub
 
-Sub RowSizeZoom()
+Private Sub RowSizeZoom()
   Dim ws As Worksheet
   For Each ws In ActiveWorkbook.Worksheets
     ws.Range("A2:A" & ws.Rows.Count).rowHeight = 12.75
@@ -440,35 +440,38 @@ Sub CleanUp()
             
 End Sub
 
-Sub PTInterpTotals()
+Private Sub PTInterpTotals()
 '
 ' PTInterpTotals Macro
 '
 
 ' https://www.mrexcel.com/forum/excel-questions/785527-macro-create-pivot-table-dynamic-data-range.html
 
-    Dim PCache As PivotCache, lr As Long, pt As PivotTable
-    
+    Dim PCache As PivotCache, lr As Long, pt As PivotTable, name As String, ws As Worksheet
+    Dim fArr, rngList As Range, elem As Variant, i As Long
+    Dim pi As PivotItem, pf As PivotField
+           
     On Error Resume Next
         Application.DisplayAlerts = False
         Sheets("InterpTotals").Delete
     On Error GoTo 0
     Application.DisplayAlerts = True
     
+    name = "InterpTotals"
+    
+    
     Worksheets("Data").Activate
     Set PCache = ActiveWorkbook.PivotCaches.Create(SourceType:=1, SourceData:=Range("A1").CurrentRegion.Address)
     Worksheets.Add
     With ActiveSheet
-        .name = "InterpTotals"
+        .name = name
         .Tab.Color = RGB(192, 0, 0)
     End With
     
-    Set pt = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=Range("A1"), TableName:="PTInterpTotals")
+    Set ws = ActiveWorkbook.Worksheets(name)
+    
+    Set pt = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=Range("A1"), TableName:="PT" & name)
 
-    With pt.PivotFields("CASE NUMBER")
-        .Orientation = xlRowField
-        .Position = 1
-    End With
     With pt.PivotFields("EMPLOYEE TYPE")
         .Orientation = xlRowField
         .Position = 1
@@ -477,13 +480,124 @@ Sub PTInterpTotals()
         .Orientation = xlRowField
         .Position = 2
     End With
-    With pt.PivotFields("INTERPRETATION DT")
+    With pt.PivotFields("CASE NUMBER")
         .Orientation = xlRowField
         .Position = 3
     End With
+    With pt.PivotFields("INTERPRETATION DT")
+        .Orientation = xlRowField
+        .Position = 4
+    End With
+
+    With pt.PivotFields("QUALITY CODE")
+        .Orientation = xlColumnField
+        .Position = 1
+    End With
+
+    'Sort quality codes in ascending order on chart.
+    With pt.PivotFields("QUALITY CODE")
+        On Error Resume Next
+        .PivotItems("CYAGREE").Position = 1
+        .PivotItems("CYMINOR").Position = 2
+        .PivotItems("CYMAJOR").Position = 3
+        .PivotItems("CY+3").Position = 1
+        .PivotItems("CY+2").Position = 1
+        .PivotItems("CY+1.5").Position = 1
+        .PivotItems("CY+1").Position = 1
+        .PivotItems("CY+0.5").Position = 1
+        .PivotItems("CY0").Position = 1
+        .PivotItems("CY-0.5").Position = 1
+        .PivotItems("CY-1").Position = 1
+        .PivotItems("CY-1.5").Position = 1
+        .PivotItems("CY-2").Position = 1
+        .PivotItems("CY-3").Position = 1
+    End With
+
+    'select discrepancies and group them:
+    'if pivot item is there, add it to array, then loop through the array, select and group
+    
+    'create filter list
+    rngList = ActiveWorkbook.Worksheets(name).Range("BB1:BB12")
+    fArr = Array("CY-3", "CY-2", "CY-1.5", "CY-1", "CY-0.5", "CY+0.5", "CY+1", "CY+1.5", "CY+2", "CY+3", "CYMINOR", "CYMAJOR")
+    i = 1
+    
+    'adds quality codes to a range for filtering?
+    For Each elem In fArr
+        ws.Range("BB" & i) = elem
+        i = i + 1
+    Next elem
+    
+    Set pf = pt.PivotFields("QUALITY CODE")
+    
+
+    Dim val As String
+    
+    'filter and group discrepancies
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY+3") Or (val = "CY+2") Or (val = "CY+1.5") Or (val = "CY+1") Or (val = "CY+0.5") _
+            Or (val = "CY-3") Or (val = "CY-2") Or (val = "CY-1.5") Or (val = "CY-1") Or (val = "CY-0.5") _
+            Or (val = "CYMINOR") Or (val = "CYMAJOR") Then
+            pi.Visible = True
+        Else: pi.Visible = False
+        End If
+    Next pi
+    
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group1]", xlLabelOnly
+    Selection.Value = "DISCREPANCIES"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    
+    Set pf = pt.PivotFields("QUALITY CODE2")
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    
+    'filter and group agrees
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY0") Or (val = "CYAGREE") Then
+            pi.Visible = True
+        Else: pi.Visible = False
+        End If
+    Next pi
+    
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group2]", xlLabelOnly
+    Selection.Value = "AGREES"
+    
+    Set pf = pt.PivotFields("QUALITY CODE")
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    
+    Set pf = pt.PivotFields("QUALITY CODE2")
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    
+    'collapse to employee
+    pt.PivotFields("EMPLOYEE").ShowDetail = False
+    pt.PivotFields("QUALITY CODE2").ShowDetail = False
     
     pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
     pt.PivotFields("EMPLOYEE").ShowDetail = False
+    
+    Range("J1").Value = "To send discrepant case list by employee:"
+    Range("K2").Value = "Double click on each employee's DISCREPANCIES number to generate new sheet."
+    Range("K3").Value = "Right click on sheet tab and select move, select (new book) from dropdown."
+    Range("K4").Value = "In new book go to File > Share > Email > Send as Attachment."
+    Range("K4").Value = "Enter the employee's email, and click send."
     
     Range("A1").Select
     ActiveWorkbook.ShowPivotTableFieldList = False
@@ -491,7 +605,7 @@ Sub PTInterpTotals()
     
 End Sub
 
-Sub zASCtoSIL()
+Private Sub zASCtoSIL()
 
     Dim ws As Worksheet, pt As PivotTable, pi As PivotItem, pt2 As PivotTable
     Dim i As Long, j As Long, empRng As Range
@@ -619,7 +733,7 @@ Sub zASCtoSIL()
 
 End Sub
 
-Sub PTBenchmarks()
+Private Sub PTBenchmarks()
 '
 ' PTBenchmarks Macro
 '
@@ -728,6 +842,7 @@ Sub PTBenchmarks()
         .Orientation = xlRowField
         .Position = 4
     End With
+    'collapse to employee
     pt2.PivotFields("EMPLOYEE").ShowDetail = False
     
     'Diagnosis Category Setup
@@ -941,7 +1056,7 @@ Sub PTBenchmarks()
     
 End Sub
 
-Sub PTHPVbyDx()
+Private Sub PTHPVbyDx()
 '
 ' PTHPVbyDx Macro
 '
@@ -1124,7 +1239,7 @@ Sub PTHPVbyDx()
     
 End Sub
 
-Sub PTASCUSHPV()
+Private Sub PTASCUSHPV()
 '
 ' PTASCUSHPV
 '
@@ -1319,7 +1434,7 @@ Sub PTASCUSHPV()
     
 End Sub
 
-Sub PTCTAgreement()
+Private Sub PTCTAgreement()
 '
 ' PTCTAgreement
 '
@@ -1537,7 +1652,7 @@ Sub PTCTAgreement()
     
 End Sub
 
-Sub PTCTPathAgreement()
+Private Sub PTCTPathAgreement()
 '
 ' PTCTPathAgreement
 '
@@ -1801,7 +1916,8 @@ Sub PTCTPathAgreement()
 
 End Sub
 
-Sub MultiSheetSub()
+
+Private Sub MultiSheetSub()
     'automatically selected by CleanUp() when multiple data sheets are available
     UnmergeAll
     DeleteEmptyRows
@@ -1816,7 +1932,7 @@ Sub MultiSheetSub()
     RowSizeZoom
 End Sub
 
-Sub SingleSheetSub()
+Private Sub SingleSheetSub()
     'automatically selected by CleanUp() when only one data sheet is available
     UnmergeAll
     DeleteEmptyRows
@@ -1830,7 +1946,7 @@ Sub SingleSheetSub()
     RowSizeZoom
 End Sub
 
-Sub QuickRecopy()
+Private Sub QuickRecopy()
     'for use when data already is unmerged and empty rows deleted
     CopyRangeFromMultiWorksheets
     HideSheets
