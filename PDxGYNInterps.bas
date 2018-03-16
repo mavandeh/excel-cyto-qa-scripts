@@ -159,7 +159,7 @@ Private Sub UpdateHPVResults()
     Set ws = ActiveWorkbook.Worksheets("Data")
     'find the hpv16 column and store the index
     For HPV16Col = 1 To LastCol(ws)
-        If ws.Cells(1, HPV16Col).Value = "HPV16" Then
+        If ws.Cells(1, HPV16Col).Value = "HPVG1" Then
             Exit For
         End If
     Next HPV16Col
@@ -230,7 +230,7 @@ Private Sub UpdateHPVResults()
             cell.Value = cell.Value ' comment this line for formula troubleshooting
         Next cell
       ElseIf mankato Then
-        If ws.Cells(1, col).Value = "HPV18" Then ws.Cells(1, col).Value = "HPV18/45"
+        If ws.Cells(1, col).Value = "HPVG18" Then ws.Cells(1, col).Value = "HPV18/45"
         For Each cell In Columns(col).SpecialCells(xlCellTypeBlanks).Areas
             cell.FormulaArray = "=INDEX(C,MATCH(LEFT(RC1,9)&""HPVG"",LEFT(C1,9)&C2,0))"
             cell.Value = cell.Value ' comment this line for formula troubleshooting
@@ -354,7 +354,7 @@ End Sub
 
 Private Function CheckHPV(rng As String) As Boolean
 
-  If Range(rng) = "HPV16" Then
+  If Range(rng) = "HPVG1" Then
   CheckHPV = True
   Else
   CheckHPV = False
@@ -390,17 +390,17 @@ Private Sub InsertHPVOverall()
         
     ' column location invariant overall placement
     For i = 1 To lc
-        If ws.Cells(1, i).Value = "HPV16" Then
+        If ws.Cells(1, i).Value = "HPVG1" Then
             HPV16Col = i
-        ElseIf ws.Cells(1, i).Value = "HPV18" Then
+        ElseIf ws.Cells(1, i).Value = "HPVG18" Then
             HPV18Col = i
-        ElseIf ws.Cells(1, i).Value = "HPVOTHER" Then
+        ElseIf ws.Cells(1, i).Value = "HPVGOTHER" Then
             HPVOthCol = i
         ElseIf (HPV16Col > 0) And (HPV18Col > 0) And (HPVOthCol > 0) Then
             Exit For
         ElseIf i = lc Then
             MsgBox "InsertHPVOverall(): Could not find one or more columns: " _
-                & "HPV16, HPV18, or HPVOTHER."
+                & "HPVG1 (16), HPVG18, or HPVGOTHER."
             End
         End If
     Next i
@@ -1095,7 +1095,7 @@ Private Sub PTHPVbyDx()
         If i > 1 Then ws.Cells(i, 1) = Left(ws.Cells(i, 1), 9)
         If (Left(ws.Cells(i, 1).Value, 2) = "GM") Then
             mankato = True
-            hpvColName = "HPVOTHER"
+            hpvColName = "HPVGOTHER"
         ElseIf (Left(ws.Cells(i, 1).Value, 2) = "GA") Or (Left(ws.Cells(i, 1).Value, 2) = "GR") Then
             mcra = True
             hpvColName = "HPVOVERALL"
@@ -1197,9 +1197,9 @@ Private Sub PTHPVbyDx()
         .Width = 1000 ' resize 4.0 pt at 72 ppi.
     End With
     
-    ActiveChart.FullSeriesCollection(1).ApplyDataLabels
-    ActiveChart.FullSeriesCollection(2).ApplyDataLabels
-    ActiveChart.FullSeriesCollection(1).Select
+    ActiveChart.SeriesCollection(1).ApplyDataLabels
+    ActiveChart.SeriesCollection(2).ApplyDataLabels
+    ActiveChart.SeriesCollection(1).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent2
@@ -1208,7 +1208,7 @@ Private Sub PTHPVbyDx()
         .Transparency = 0
         .Solid
     End With
-    ActiveChart.FullSeriesCollection(2).Select
+    ActiveChart.SeriesCollection(2).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent1
@@ -1278,7 +1278,7 @@ Private Sub PTASCUSHPV()
         If i > 1 Then ws.Cells(i, 1) = Left(ws.Cells(i, 1), 9)
         If (Left(ws.Cells(i, 1).Value, 2) = "GM") Then
             mankato = True
-            hpvColName = "HPVOTHER"
+            hpvColName = "HPVGOTHER"
         ElseIf (Left(ws.Cells(i, 1).Value, 2) = "GA") Or (Left(ws.Cells(i, 1).Value, 2) = "GR") Then
             mcra = True
             hpvColName = "HPVOVERALL"
@@ -1398,9 +1398,9 @@ Private Sub PTASCUSHPV()
         .Width = 1000 ' resize 4.0 pt at 72 ppi.
     End With
     
-    ActiveChart.FullSeriesCollection(1).ApplyDataLabels
-    ActiveChart.FullSeriesCollection(2).ApplyDataLabels
-    ActiveChart.FullSeriesCollection(1).Select
+    ActiveChart.SeriesCollection(1).ApplyDataLabels
+    ActiveChart.SeriesCollection(2).ApplyDataLabels
+    ActiveChart.SeriesCollection(1).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent2
@@ -1409,7 +1409,7 @@ Private Sub PTASCUSHPV()
         .Transparency = 0
         .Solid
     End With
-    ActiveChart.FullSeriesCollection(2).Select
+    ActiveChart.SeriesCollection(2).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent1
@@ -1589,7 +1589,7 @@ Private Sub PTCTAgreement()
    
     Selection.Format.TextFrame2.TextRange.Characters.Text = cTitle
 
-    ActiveChart.FullSeriesCollection(3).Select
+    ActiveChart.SeriesCollection(3).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent2
@@ -1598,7 +1598,7 @@ Private Sub PTCTAgreement()
         .Transparency = 0
         .Solid
     End With
-    ActiveChart.FullSeriesCollection(2).Select
+    ActiveChart.SeriesCollection(2).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent4
@@ -1607,7 +1607,7 @@ Private Sub PTCTAgreement()
         .Transparency = 0
         .Solid
     End With
-    ActiveChart.FullSeriesCollection(1).Select
+    ActiveChart.SeriesCollection(1).Select
     With Selection.Format.Fill
         .Visible = msoTrue
         .ForeColor.ObjectThemeColor = msoThemeColorAccent1
@@ -1616,9 +1616,9 @@ Private Sub PTCTAgreement()
         .Transparency = 0
         .Solid
     End With
-    ActiveChart.FullSeriesCollection(3).ApplyDataLabels
-    ActiveChart.FullSeriesCollection(2).ApplyDataLabels
-    ActiveChart.FullSeriesCollection(1).ApplyDataLabels
+    ActiveChart.SeriesCollection(3).ApplyDataLabels
+    ActiveChart.SeriesCollection(2).ApplyDataLabels
+    ActiveChart.SeriesCollection(1).ApplyDataLabels
     
     ActiveChart.ChartArea.Interior.Color = RGB(255, 255, 255)
 
