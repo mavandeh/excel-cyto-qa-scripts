@@ -159,7 +159,8 @@ Private Sub UpdateHPVResults()
     Set ws = ActiveWorkbook.Worksheets("Data")
     'find the hpv16 column and store the index
     For HPV16Col = 1 To LastCol(ws)
-        If ws.Cells(1, HPV16Col).Value = "HPVG1" Then
+        If ws.Cells(1, HPV16Col).Value = "HPVG1" Or ws.Cells(1, HPV16Col).Value = "HPV16" Then
+            ws.Cells(1, HPV16Col).Value = "HPV16"
             Exit For
         End If
     Next HPV16Col
@@ -354,7 +355,7 @@ End Sub
 
 Private Function CheckHPV(rng As String) As Boolean
 
-  If Range(rng) = "HPVG1" Then
+  If Range(rng) = "HPVG1" Or Range(rng) = "HPV16" Then
   CheckHPV = True
   Else
   CheckHPV = False
@@ -390,17 +391,17 @@ Private Sub InsertHPVOverall()
         
     ' column location invariant overall placement
     For i = 1 To lc
-        If ws.Cells(1, i).Value = "HPVG1" Then
+        If ws.Cells(1, i).Value = "HPVG1" Or ws.Cells(1, i).Value = "HPV16" Then
             HPV16Col = i
-        ElseIf ws.Cells(1, i).Value = "HPVG18" Then
+        ElseIf ws.Cells(1, i).Value = "HPVG18" Or ws.Cells(1, i).Value = "HPV18" Then
             HPV18Col = i
-        ElseIf ws.Cells(1, i).Value = "HPVGOTHER" Then
+        ElseIf ws.Cells(1, i).Value = "HPVGOTHER" Or ws.Cells(1, i).Value = "HPVOTHER" Then
             HPVOthCol = i
         ElseIf (HPV16Col > 0) And (HPV18Col > 0) And (HPVOthCol > 0) Then
             Exit For
         ElseIf i = lc Then
             MsgBox "InsertHPVOverall(): Could not find one or more columns: " _
-                & "HPVG1 (16), HPVG18, or HPVGOTHER."
+                & "HPVG1/HPV16, HPV(G)18, or HPV(G)OTHER."
             End
         End If
     Next i
