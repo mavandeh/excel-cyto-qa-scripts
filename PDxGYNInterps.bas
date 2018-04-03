@@ -444,8 +444,8 @@ End Sub
 
 Private Function GetColNum(ws As Worksheet, colName As String, lastCol As Long) As Long
     
-    Dim i As Long, tmp As Long
-    tmp = -1
+    Dim i As Long
+
     'search worksheet's first row for name passed in function up to the last column
     For i = 1 To lastCol
         If ws.Cells(1, i).Value = colName Then
@@ -740,6 +740,8 @@ Private Sub zASCtoSIL()
     lcol = lastCol(ws)
     lrow = LastRow(ws)
     Cells(2, lcol + 1).Value = "ASC:SIL Ratio"
+    Columns(lcol + 1).NumberFormat = "0.00"
+    
     
     For i = 4 To lrow
         On Error Resume Next
@@ -781,6 +783,9 @@ Private Sub zASCtoSIL()
             End With
         End If
     Next i
+    
+    Selection.NumberFormat = "0.00%"
+    
 
 End Sub
 
@@ -1054,12 +1059,38 @@ Private Sub PTBenchmarks()
         .Cells(9, lcol).FormulaR1C1 = "0.043"       'UNSAT
         .Cells(10, lcol).FormulaR1C1 = "3.8"        'ASC:SIL
     End With
+    
+    'format benchmarks
+    For i = 4 To 10
+        With Range(Cells(i, bMarksTitleCol + 1), Cells(i, bMarksTitleCol + 7))
+            .FormatConditions.AddColorScale ColorScaleType:=3
+            '.FormatConditions(Selection.FormatConditions.Count).SetFirstPriority
+            'set lowest value
+            .FormatConditions(1).ColorScaleCriteria(1).Type = xlConditionValueFormula
+            .FormatConditions(1).ColorScaleCriteria(1).Value = "=Benchmarks!R" & i & "C" & bMarksTitleCol + 1
+            .FormatConditions(1).ColorScaleCriteria(1).FormatColor.Color = 13011546
+            .FormatConditions(1).ColorScaleCriteria(1).FormatColor.TintAndShade = 0
+            'set middle value
+            .FormatConditions(1).ColorScaleCriteria(2).Type = xlConditionValueFormula
+            .FormatConditions(1).ColorScaleCriteria(2).Value = "=Benchmarks!R" & i & "C" & bMarksTitleCol + 4
+            .FormatConditions(1).ColorScaleCriteria(2).FormatColor.Color = 16776444
+            .FormatConditions(1).ColorScaleCriteria(2).FormatColor.TintAndShade = 0
+            'set highest value
+            .FormatConditions(1).ColorScaleCriteria(3).Type = xlConditionValueFormula
+            .FormatConditions(1).ColorScaleCriteria(3).Value = "=Benchmarks!R" & i & "C" & bMarksTitleCol + 7
+            .FormatConditions(1).ColorScaleCriteria(3).FormatColor.Color = 7039480
+            .FormatConditions(1).ColorScaleCriteria(3).FormatColor.TintAndShade = 0
+        End With
+    Next i
 
     'set conditional formatting for static percentile columns
     Dim matchCount As Long
     matchCount = 0
     For i = 0 To 19
         For j = 4 To 10
+            'this debugging code shows you what cells' values are being compared
+            'Cells(2, lcol - i).Select
+            'Cells(j, bMarksTitleCol).Select
             If Cells(2, lcol - i).Value = Cells(j, bMarksTitleCol).Value Then
 
                 With Columns(lcol - i)
@@ -1967,6 +1998,282 @@ Private Sub PTCTPathAgreement()
 
 End Sub
 
+Private Sub PTSetOverTotals()
+'
+' PTCTPathAgreement
+'
+
+' https://www.mrexcel.com/forum/excel-questions/785527-macro-create-pivot-table-dynamic-data-range.html
+
+    Dim PCache As PivotCache, lr As Long, pt As PivotTable, pi As PivotItem, ws As Worksheet, i As Long, j As Long
+    Dim name As String, ptName As String, cTitle As String, cLoc As Range, pasteCol As Long, pasteRow As Long
+    Dim chartatlastcol As Boolean, pf As PivotField
+            
+    name = "SetOverTotals"                                   'Pivot table and tab name
+    ptName = "PT" & name
+    
+    On Error Resume Next
+        Application.DisplayAlerts = False
+        Sheets(name).Delete
+    On Error GoTo 0
+    Application.DisplayAlerts = True
+    
+    Worksheets("Data").Activate
+    Set PCache = ActiveWorkbook.PivotCaches.Create(SourceType:=1, SourceData:=Range("A1").CurrentRegion.Address)
+    Worksheets.Add
+    With ActiveSheet
+        .name = name
+        .Tab.Color = RGB(192, 0, 0)
+    End With
+    
+    Set ws = Worksheets(name)
+    Set pt = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=Range("A1"), TableName:=ptName)
+
+    'Diagnosis category setup.  1) Add diagnosis category to PT
+    With pt.PivotFields("DIAGNOSIS CATEGORY")
+        .Orientation = xlRowField
+        .Position = 1
+    End With
+    
+    '2) select nil category items and group them:
+    On Error Resume Next
+    Application.PivotTableSelection = True
+    pt.PivotSelect "DIAGNOSIS CATEGORY[GYN NIL,GYNNOEC,GYN REAC,GYN ORG]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "DIAGNOSIS CATEGORY2[Group1]", xlLabelOnly
+    Selection.Value = "NIL"
+    
+    '3) sort diagnosis categories
+    With pt.PivotFields("DIAGNOSIS CATEGORY2")
+        On Error Resume Next
+        .ShowDetail = False
+        .PivotItems("GYN UNSAT").Position = 1
+        .PivotItems("NIL").Position = 2
+        .PivotItems("GYN ASCUS").Position = 3
+        .PivotItems("GYN ASCH").Position = 4
+        .PivotItems("GYN LSIL").Position = 5
+        .PivotItems("GYN HSIL").Position = 6
+        .PivotItems("GYN AGUS").Position = 7
+        .PivotItems("GYN AIS").Position = 8
+        .PivotItems("GYN CANCER").Position = 9
+    End With
+    
+    'Add column/row fields and filters
+    With pt.PivotFields("EMPLOYEE TYPE")
+        .Orientation = xlRowField
+        .Position = 1
+    End With
+    With pt.PivotFields("EMPLOYEE")
+        .Orientation = xlRowField
+        .Position = 2
+    End With
+    With pt.PivotFields("FINAL DIAGNOSIS")
+        .Orientation = xlRowField
+        .Position = 4 '4 because of diagnosis category setup will place it at 3.  This should go after.
+    End With
+    With pt.PivotFields("INTERPRETATION DT")
+        .Orientation = xlRowField
+        .Position = 5
+    End With
+    With pt.PivotFields("CASE NUMBER")
+        .Orientation = xlRowField
+        .Position = 6
+    End With
+    With pt.PivotFields("QUALITY CODE")
+        .Orientation = xlColumnField
+        .Position = 1
+    End With
+    With pt.PivotFields("TEST CODE")
+        .Orientation = xlPageField
+        .Position = 1
+    End With
+
+    'Filter out all HPV results other than Positive and Negative
+    For Each pi In pt.PivotFields("QUALITY CODE").PivotItems
+        If (pi.Value = "CYAGREE") Or (pi.Value = "CYMINOR") _
+            Or (pi.Value = "CYMAJOR") Or (pi.Value = "(blank)") _
+            Or (pi.Value = "PDSNOMED") Then
+            pi.Visible = False
+        Else: pi.Visible = True
+        End If
+    Next pi
+    
+    
+    'Sort quality codes in ascending order on chart.
+    With pt.PivotFields("QUALITY CODE")
+        On Error Resume Next
+        .PivotItems("CY+3").Position = 1
+        .PivotItems("CY+2").Position = 1
+        .PivotItems("CY+1.5").Position = 1
+        .PivotItems("CY+1").Position = 1
+        .PivotItems("CY+0.5").Position = 1
+        .PivotItems("CY0").Position = 1
+        .PivotItems("CY-0.5").Position = 1
+        .PivotItems("CY-1").Position = 1
+        .PivotItems("CY-1.5").Position = 1
+        .PivotItems("CY-2").Position = 1
+        .PivotItems("CY-3").Position = 1
+    End With
+        
+    Set pf = pt.PivotFields("QUALITY CODE")
+    
+    Dim val As String
+    
+    'filter and group (+)Major discrepancies
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY+3") Or (val = "CY+2") Or (val = "CY+1.5") Then
+            pi.Visible = True
+        Else: pi.Visible = False
+        End If
+    Next pi
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group1]", xlLabelOnly
+    Selection.Value = "(+)Major"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        pi.Visible = True
+    Next pi
+    
+    'filter and group (-)Major discrepancies
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY-3") Or (val = "CY-2") Or (val = "CY-1.5") Then
+            pi.Visible = True
+        Else: pi.Visible = False
+        End If
+    Next pi
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group2]", xlLabelOnly
+    Selection.Value = "(-)Major"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        pi.Visible = True
+    Next pi
+    
+    'filter and group (+)Minor discrepancies
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY+1") Or (val = "CY+0.5") Then
+            pi.Visible = True
+        Else: pi.Visible = False
+        End If
+    Next pi
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group3]", xlLabelOnly
+    Selection.Value = "(+)Minor"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        pi.Visible = True
+    Next pi
+    
+    'filter and group (-)Minor discrepancies
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY-1") Or (val = "CY-0.5") Then
+            pi.Visible = True
+        Else: pi.Visible = False
+        End If
+    Next pi
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group4]", xlLabelOnly
+    Selection.Value = "(-)Minor"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        pi.Visible = True
+    Next pi
+    
+    'filter and group non-setovers
+    For Each pi In pf.PivotItems
+        val = pi.Value
+        If (val = "CY+3") Or (val = "CY+2") Or (val = "CY+1.5") Or (val = "CY+1") Or (val = "CY+0.5") _
+            Or (val = "CY-3") Or (val = "CY-2") Or (val = "CY-1.5") Or (val = "CY-1") Or (val = "CY-0.5") _
+            Or (val = "CY0") Then
+            pi.Visible = False
+        Else: pi.Visible = True
+        End If
+    Next pi
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE2[Group5]", xlLabelOnly
+    Selection.Value = "NonSetOver"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        pi.Visible = True
+    Next pi
+    
+    With pt.PivotFields("QUALITY CODE2")
+        On Error Resume Next
+        .PivotItems("NonSetOver").Position = 1
+        .PivotItems("(+)Major").Position = 1
+        .PivotItems("(+)Minor").Position = 1
+        .PivotItems("CY0").Position = 1
+        .PivotItems("(-)Minor").Position = 1
+        .PivotItems("(-)Major").Position = 1
+
+    End With
+    
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        val = pi.Value
+        If (val = "NonSetOver") Then
+            pi.Visible = False
+        Else: pi.Visible = True
+        End If
+    Next pi
+    Application.PivotTableSelection = True
+    pt.PivotSelect "QUALITY CODE2[All]", xlLabelOnly
+    Selection.Group
+    pt.PivotSelect "QUALITY CODE3[Group1]", xlLabelOnly
+    Selection.Value = "SetOver"
+    
+    For Each pi In pf.PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE2").PivotItems
+        pi.Visible = True
+    Next pi
+    For Each pi In pt.PivotFields("QUALITY CODE3").PivotItems
+        pi.Visible = True
+    Next pi
+    
+    pt.PivotFields("QUALITY CODE3").Subtotals(1) = True
+    
+    'collapse to employee
+    pt.PivotFields("EMPLOYEE").ShowDetail = False
+    pt.PivotFields("QUALITY CODE2").ShowDetail = False
+   
+    'add interp count by case number and collapse to employee
+    pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
+    ws.Cells(1, 12).Value = "Guide:"
+    ws.Cells(2, 13).Value = "To see volume of NIL cases set over, filter by DIAGNOSIS CATEGORY2 = NIL."
+    ws.Cells(3, 13).Value = "To calculate as percentages, right click > Show Values As > % of Row Total."
+    
+End Sub
+
 
 Private Sub MultiSheetSub()
     'automatically selected by CleanUp() when multiple data sheets are available
@@ -2020,5 +2327,6 @@ Sub GeneratePT()
     PTASCUSHPV
     PTCTAgreement
     PTCTPathAgreement
+    PTSetOverTotals
 End Sub
 
