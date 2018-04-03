@@ -33,10 +33,10 @@ Function LastRow(sh As Worksheet)
     On Error GoTo 0
 End Function
 
-Function LastCol(sh As Worksheet)
+Function lastCol(sh As Worksheet)
     ' Borrowed from https://msdn.microsoft.com/en-us/library/cc793964(v=office.12).aspx
     On Error Resume Next
-    LastCol = sh.Cells.Find(What:="*", _
+    lastCol = sh.Cells.Find(What:="*", _
                             After:=sh.Range("A1"), _
                             Lookat:=xlPart, _
                             LookIn:=xlFormulas, _
@@ -148,6 +148,7 @@ End Sub
 
 Private Sub UpdateHPVResults()
   
+  'TO DO: Refactor to use GetColNum() and GetAccSeq()
   With Application
     .Calculation = xlCalculationManual
     .ScreenUpdating = False
@@ -158,7 +159,7 @@ Private Sub UpdateHPVResults()
         
     Set ws = ActiveWorkbook.Worksheets("Data")
     'find the hpv16 column and store the index
-    For HPV16Col = 1 To LastCol(ws)
+    For HPV16Col = 1 To lastCol(ws)
         If ws.Cells(1, HPV16Col).Value = "HPVG1" Or ws.Cells(1, HPV16Col).Value = "HPV16" Then
             ws.Cells(1, HPV16Col).Value = "HPV16"
             Exit For
@@ -260,7 +261,7 @@ Private Sub DeleteHPVLines()
 
     Set ws = ActiveWorkbook.Worksheets("Data")
     lr = LastRow(ws)
-    lc = LastCol(ws)
+    lc = lastCol(ws)
     Set rngData = ws.Range(ws.Cells(1, 1), ws.Cells(lr, lc))
     
     
@@ -293,7 +294,7 @@ Private Sub DeleteDuplicateInterpretations()
                   
   Set ws = Worksheets("Data")
   lr = LastRow(ws)
-  lc = LastCol(ws)
+  lc = lastCol(ws)
   uniqueID = "CASE_EMPLOYEE"            'this is the unique id by which duplicates will be identified,
                                         'concatenation of CASE NUMBER and EMPLOYEE
   
@@ -325,7 +326,7 @@ Private Sub DeleteDuplicateInterpretations()
         Exit For
     ElseIf i = lc - 1 Then
         ws.Cells(1, lc + 1).Value = uniqueID
-        lc = LastCol(ws)
+        lc = lastCol(ws)
         ws.Cells(2, lc).Formula = "=Left(RC[" & caseCol - lc & "],9)&RC[" & spectypeCol - lc & "]&RC[" & empCol - lc & "]"
         ws.Cells(2, lc).AutoFill Destination:=Range(ws.Cells(2, lc), ws.Cells(lr, lc))
     End If
@@ -378,13 +379,13 @@ Private Sub InsertHPVOverall()
     colName = "HPVOverall"                      'if this name changes, it must also change in PTHPVbyDx and PTASCUSHPV
     Set ws = ActiveWorkbook.Worksheets("Data")
     lr = LastRow(ws)
-    lc = LastCol(ws)
+    lc = lastCol(ws)
     
     'search columns backwards for if overall hpv column already exists, if so, delete
     For i = 0 To lc - 1
         If ws.Cells(1, lc - i).Value = colName Then
             ws.Range(ws.Cells(1, lc - i), ws.Cells(1, lc - i)).EntireColumn.Delete
-            lc = LastCol(ws)
+            lc = lastCol(ws)
             Exit For
         End If
     Next i
@@ -439,6 +440,55 @@ Sub CleanUp()
         End If
     End If
             
+End Sub
+
+Private Function GetColNum(ws As Worksheet, colName As String, lastCol As Long) As Long
+    
+    Dim i As Long, tmp As Long
+    tmp = -1
+    'search worksheet's first row for name passed in function up to the last column
+    For i = 1 To lastCol
+        If ws.Cells(1, i).Value = colName Then
+            GetColNum = i
+            Exit For
+        ElseIf (i = lastCol) And (ws.Cells(1, i).Value <> colName) Then
+            'if column not found, return -1
+            GetColNum = -1
+        End If
+    Next i
+End Function
+
+Private Function GetAccSeq(ws As Worksheet) As String
+    'find last column
+    Dim lc As Long, caseCol As Long
+    lc = lastCol(ws)
+    
+    'find CASE NUMBER column
+    caseCol = GetColNum(ws, "CASE NUMBER", lc)
+    
+    'return second character of row 2
+    GetAccSeq = Left(ws.Cells(2, caseCol).Value, 2)
+    
+End Function
+
+Private Sub AddIDCodes()
+    
+    'declare worksheet to work with
+    Dim ws As Worksheet, lc As Long, lr As Long, empCol As Long
+    Set ws = ActiveWorkbook.Worksheets("Data")
+    lc = lastCol(ws)
+    lr = LastRow(ws)
+    
+    'name the id column
+    ws.Cells(1, lc + 1).Value = "ID CODE"
+    'find employee column
+    empCol = GetColNum(ws, "EMPLOYEE", lc)
+    
+    'check if rochester, if yes, add formula and fill to last row
+    If (Right(GetAccSeq(ws), 1) = "R") And (empCol > 0) Then
+        ws.Cells(2, lc + 1).Formula = "=VLOOKUP(RC" & empCol & ",'\\mfad.mfroot.org\rchdept\dlmpim_cytologymap_standard\CytoPath\QA\[Confidential ID Codes.xlsx]TechIDs'!C1:C5,5,FALSE)"
+        ws.Cells(2, lc + 1).AutoFill Destination:=Range(ws.Cells(2, lc + 1), ws.Cells(lr, lc + 1))
+    End If
 End Sub
 
 Private Sub PTInterpTotals()
@@ -616,7 +666,7 @@ Private Sub zASCtoSIL()
     Set ws = Worksheets("Benchmarks")
     Set pt = ws.PivotTables("PTBenchmarksCount")
     Set pt2 = ws.PivotTables("PTBenchmarksPercent")
-    pasteCol = LastCol(ws) + 2
+    pasteCol = lastCol(ws) + 2
     j = 1
         
     With [A1]
@@ -646,7 +696,7 @@ Private Sub zASCtoSIL()
     
     For i = 4 To LastRow(ws)
         If Len(ws.Cells(i, pasteCol).Value) > 5 Then
-            With Range(Cells(i, pasteCol), Cells(i, LastCol(ws)))
+            With Range(Cells(i, pasteCol), Cells(i, lastCol(ws)))
 
                 .Borders(xlDiagonalDown).LineStyle = xlNone
                 .Borders(xlDiagonalUp).LineStyle = xlNone
@@ -679,7 +729,7 @@ Private Sub zASCtoSIL()
         End If
     Next i
     
-    pasteCol = LastCol(ws) + 2
+    pasteCol = lastCol(ws) + 2
     
     'create static percentage table for benchmarks
     With [A1]
@@ -687,7 +737,7 @@ Private Sub zASCtoSIL()
         ws.Cells(1, pasteCol).PasteSpecial xlPasteValues
     End With
     
-    lcol = LastCol(ws)
+    lcol = lastCol(ws)
     lrow = LastRow(ws)
     Cells(2, lcol + 1).Value = "ASC:SIL Ratio"
     
@@ -699,7 +749,7 @@ Private Sub zASCtoSIL()
     
     For i = 4 To LastRow(ws)
         If Len(ws.Cells(i, pasteCol).Value) > 5 Then
-            With Range(Cells(i, pasteCol), Cells(i, LastCol(ws)))
+            With Range(Cells(i, pasteCol), Cells(i, lastCol(ws)))
 
                 .Borders(xlDiagonalDown).LineStyle = xlNone
                 .Borders(xlDiagonalUp).LineStyle = xlNone
@@ -824,7 +874,7 @@ Private Sub PTBenchmarks()
     'add interp count by case number and collapse to employee
     pt.AddDataField pt.PivotFields("CASE NUMBER"), "Count of CASE NUMBER", xlCount
     
-    lcol = LastCol(ws) + 2
+    lcol = lastCol(ws) + 2
     Set pt2 = ActiveSheet.PivotTables.Add(PivotCache:=PCache, TableDestination:=ws.Cells(1, lcol), TableName:="PTBenchmarksPercent")
     
     With pt2.PivotFields("EMPLOYEE TYPE")
@@ -899,7 +949,7 @@ Private Sub PTBenchmarks()
     'Table and category titles
     'prepare to populate benchmarks table.
     Dim bMarksTitleCol As Long
-    lcol = LastCol(ws) + 2
+    lcol = lastCol(ws) + 2
     'store value of this column for later
     bMarksTitleCol = lcol
     With ws
@@ -915,7 +965,7 @@ Private Sub PTBenchmarks()
     End With
     
     '5th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "5th"
         .Cells(4, lcol).FormulaR1C1 = "0.021"       'ASCUS
@@ -928,7 +978,7 @@ Private Sub PTBenchmarks()
     End With
     
     '10th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "10th"
         .Cells(4, lcol).FormulaR1C1 = "0.027"       'ASCUS
@@ -941,7 +991,7 @@ Private Sub PTBenchmarks()
     End With
     
     '25th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "25th"
         .Cells(4, lcol).FormulaR1C1 = "0.039"       'ASCUS
@@ -954,7 +1004,7 @@ Private Sub PTBenchmarks()
     End With
 
     '50th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "50th"
         .Cells(4, lcol).FormulaR1C1 = "0.054"       'ASCUS
@@ -967,7 +1017,7 @@ Private Sub PTBenchmarks()
     End With
     
     '75th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "75th"
         .Cells(4, lcol).FormulaR1C1 = "0.075"       'ASCUS
@@ -980,7 +1030,7 @@ Private Sub PTBenchmarks()
     End With
     
     '90th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "90th"
         .Cells(4, lcol).FormulaR1C1 = "0.103"       'ASCUS
@@ -993,7 +1043,7 @@ Private Sub PTBenchmarks()
     End With
 
     '95th percentile values
-    lcol = LastCol(ws) + 1
+    lcol = lastCol(ws) + 1
     With ws
         .Cells(2, lcol).FormulaR1C1 = "95th"
         .Cells(4, lcol).FormulaR1C1 = "0.125"       'ASCUS
@@ -1039,15 +1089,15 @@ Private Sub PTBenchmarks()
     
     Dim fcolp As Long
     fcolp = 0
-    While IsEmpty(Cells(3, LastCol(ws) - fcolp))
+    While IsEmpty(Cells(3, lastCol(ws) - fcolp))
         fcolp = fcolp + 1
     Wend
 
-    fcolp = LastCol(ws) - fcolp
+    fcolp = lastCol(ws) - fcolp
 
     For i = 5 To LastRow(ws)
         If Len(ws.Cells(i, fcolp).Value) > 5 Then
-            Range(Cells(i, fcolp), Cells(LastRow(ws), LastCol(ws) - 10)).FormatConditions.Delete
+            Range(Cells(i, fcolp), Cells(LastRow(ws), lastCol(ws) - 10)).FormatConditions.Delete
             Exit For
         End If
     Next i
@@ -1791,7 +1841,7 @@ Private Sub PTCTPathAgreement()
     Charts.Add
     
     If chartatlastcol Then
-        Set cLoc = ws.Cells(1, LastCol(ws) + 1)
+        Set cLoc = ws.Cells(1, lastCol(ws) + 1)
     End If
     
     ActiveChart.Location Where:=xlLocationAsObject, name:=pt.Parent.name
@@ -1849,7 +1899,7 @@ Private Sub PTCTPathAgreement()
     ActiveChart.Axes(xlValue).MaximumScaleIsAuto = True
     'ActiveChart.Axes(xlValue).MaximumScale = 1
     
-    pasteCol = LastCol(ws) + 2
+    pasteCol = lastCol(ws) + 2
     
     With [A1]
         pt.TableRange2.Copy
@@ -1857,7 +1907,7 @@ Private Sub PTCTPathAgreement()
     End With
 
     pasteRow = 1
-    pasteCol = LastCol(ws) + 2
+    pasteCol = lastCol(ws) + 2
     
     ws.Cells(pasteRow, pasteCol).Value = "CY0 Rates: "
     pasteRow = pasteRow + 1
@@ -1883,11 +1933,11 @@ Private Sub PTCTPathAgreement()
    
     ws.ChartObjects(1).Activate
     ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 5, 128, 12).Select
-    Selection.Formula = "='CTPathAgreement'!R2C" & LastCol(ws)
+    Selection.Formula = "='CTPathAgreement'!R2C" & lastCol(ws)
     ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 10, 128, 12).Select
-    Selection.Formula = "='CTPathAgreement'!R3C" & LastCol(ws)
+    Selection.Formula = "='CTPathAgreement'!R3C" & lastCol(ws)
     ActiveChart.Shapes.AddLabel(msoTextOrientationHorizontal, 12, 15, 128, 12).Select
-    Selection.Formula = "='CTPathAgreement'!R4C" & LastCol(ws)
+    Selection.Formula = "='CTPathAgreement'!R4C" & lastCol(ws)
    
     With ActiveSheet.PivotTables("PTCTPathAgreement").PivotFields("Count of CASE NUMBER")
         .Calculation = xlPercentOfRow
@@ -1927,6 +1977,7 @@ Private Sub MultiSheetSub()
     UpdateHPVResults
     DeleteHPVLines
     DeleteDuplicateInterpretations
+    AddIDCodes
     'InsertHPVOverall               'commented to allow run from updatehpvresults based on mankato
     SortData
     GeneratePT
@@ -1941,6 +1992,7 @@ Private Sub SingleSheetSub()
     UpdateHPVResults
     DeleteHPVLines
     DeleteDuplicateInterpretations
+    AddIDCodes
     'InsertHPVOverall               'commented to allow run from updatehpvresults based on mankato
     SortData
     GeneratePT
@@ -1954,6 +2006,7 @@ Private Sub QuickRecopy()
     UpdateHPVResults
     DeleteHPVLines
     DeleteDuplicateInterpretations
+    AddIDCodes
     'InsertHPVOverall               'commented to allow run from updatehpvresults based on mankato
     SortData
     RowSizeZoom
