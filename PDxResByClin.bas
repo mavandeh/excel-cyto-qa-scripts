@@ -624,8 +624,8 @@ Sub RowSizeZoom()
 End Sub
 
 Sub BuildPT()
-    PTMMLClinicianResults
     PTMayoClinicianResults
+    PTMMLClinicianResults
     RowSizeZoom
 End Sub
 
