@@ -8,4 +8,3 @@ Pulls relevant information from Cytotechnologist Daily Activity Forms into a tab
 
 Note: User will need to correct data validation issues and save the file (incorrect date format, name formatting errors).  User can then select all rows with data from that directory, delete entire row, and re-run the script.
 
-Supported DAF versions: 015201.035 and 015201.037.
