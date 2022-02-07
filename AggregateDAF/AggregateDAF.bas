@@ -58,7 +58,29 @@ Sub CopyData(ByRef shSource As Worksheet, shTarget As Worksheet, shValidation As
     iEnd = 10               'how many cells to look through for versions (start with last)
     For i = 0 To iEnd
             
-        If shValidation.Range("C" & iEnd - i).Value = "037" Then
+        If shValidation.Range("C" & iEnd - i).Value = "041" Then
+            nameRng = "B7"
+            GynSldRng = "AG11"
+            GynHrsRng = "AG12"
+            ngcSldRng = "AG13"
+            ngcHrsRng = "AG14"
+            yearRng = "AE7"
+            monthRng = "W7"
+            ngcHrsSum = shSource.Range("AG15").Value
+            Exit For
+        
+        ElseIf shValidation.Range("C" & iEnd - i).Value = "038" Then
+            nameRng = "B7"
+            GynSldRng = "AG11"
+            GynHrsRng = "AG12"
+            ngcSldRng = "AG13"
+            ngcHrsRng = "AG14:AG15"
+            yearRng = "AE7"
+            monthRng = "W7"
+            ngcHrsSum = shSource.Range("AG15").Value + shSource.Range("AG14").Value
+            Exit For
+            
+        ElseIf shValidation.Range("C" & iEnd - i).Value = "037" Then
             nameRng = "B7"
             GynSldRng = "AG11"
             GynHrsRng = "AG14"
