@@ -51,14 +51,15 @@ Sub CopyData(ByRef shSource As Worksheet, shTarget As Worksheet, shValidation As
     Dim nameRng As String, yearRng As String, monthRng As String
     Dim name As String, nameOut As String, nameSpaceLast As Long, nameSpaceFirst As Long
     Dim GynSldRng As String, GynHrsRng As String
-    Dim ngcSldRng As String, ngcHrsRng As String, ngcHrsSum As Long
+    Dim ngcSldRng As String, ngcHrsRng As String, ngcHrsSum As Double
     Dim i As Long, iEnd As Long, lRow As Long
         
     'find the most recent version entry, and then get the ver number
-    iEnd = 10               'how many cells to look through for versions (start with last)
+    iEnd = 15               'how many cells to look through for versions (start with last)
     For i = 0 To iEnd
-            
-        If shValidation.Range("C" & iEnd - i).Value = "041" Then
+        
+        ' 039 - 041 values in same cells
+        If shValidation.Range("C" & iEnd - i).Value = "039" Then
             nameRng = "B7"
             GynSldRng = "AG11"
             GynHrsRng = "AG12"
@@ -66,7 +67,8 @@ Sub CopyData(ByRef shSource As Worksheet, shTarget As Worksheet, shValidation As
             ngcHrsRng = "AG14"
             yearRng = "AE7"
             monthRng = "W7"
-            ngcHrsSum = shSource.Range("AG15").Value
+            ' CAP clarification indicates adequacy asessment is a non-screening activity. NonGYN/FNA combined to one cell.
+            ngcHrsSum = shSource.Range("AG14").Value
             Exit For
         
         ElseIf shValidation.Range("C" & iEnd - i).Value = "038" Then
@@ -77,6 +79,7 @@ Sub CopyData(ByRef shSource As Worksheet, shTarget As Worksheet, shValidation As
             ngcHrsRng = "AG14:AG15"
             yearRng = "AE7"
             monthRng = "W7"
+            ' NonGYN + Adequacy
             ngcHrsSum = shSource.Range("AG15").Value + shSource.Range("AG14").Value
             Exit For
             
@@ -88,6 +91,7 @@ Sub CopyData(ByRef shSource As Worksheet, shTarget As Worksheet, shValidation As
             ngcHrsRng = "AG15:AG17"
             yearRng = "AE7"
             monthRng = "W7"
+            ' MML FNA + NonGYN + Adequacy hrs
             ngcHrsSum = shSource.Range("AG15").Value + shSource.Range("AG16").Value + shSource.Range("AG17").Value
             Exit For
             
